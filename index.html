@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventario MTTO · Romero Panificados</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════
+     LOGIN
+════════════════════════════════════════════════════ -->
+<div id="loginSection" class="login-wrap">
+    <div class="login-card">
+
+        <div class="login-header">
+            <img
+                src="https://www.romeropanificados.com.ar/wp-content/uploads/2023/01/Recurso-8.png"
+                alt="Romero Panificados"
+                class="login-logo"
+                onerror="this.style.display='none'"
+            >
+            <p>Inventario · Mantenimiento</p>
+        </div>
+
+        <div class="login-body">
+            <div class="field">
+                <label>¿Quién sos?</label>
+                <select id="userSelect">
+                    <option value="guillermo">Guillermo (Carga)</option>
+                    <option value="oficina">Oficina</option>
+                    <option value="admin">Administrador</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>Contraseña</label>
+                <input type="password" id="passInput" placeholder="••••••••••">
+            </div>
+            <button class="btn btn-primary" onclick="login()">Entrar</button>
+        </div>
+
+        <div class="login-footer">
+            <img
+                src="https://www.romeropanificados.com.ar/wp-content/uploads/2023/01/Recurso-8.png"
+                alt="Romero"
+                class="login-footer-logo"
+                onerror="this.style.display='none'"
+            >
+            <div class="footer-dot"></div>
+            <span>Sistema de Mantenimiento</span>
+            <div class="footer-dot"></div>
+            <span>TI 2026</span>
+        </div>
+
+    </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════
+     PANEL PRINCIPAL
+════════════════════════════════════════════════════ -->
+<div id="mainSection" class="container hidden">
+
+    <!-- HEADER -->
+    <div class="panel-header">
+        <div class="panel-header-left">
+            <img
+                src="https://www.romeropanificados.com.ar/wp-content/uploads/2023/01/Recurso-8.png"
+                alt="Romero Panificados"
+                class="panel-logo"
+                onerror="this.style.display='none'"
+            >
+            <div class="panel-header-text">
+                <h2 id="welcomeText">Panel</h2>
+                <span id="badge" class="role-badge"></span>
+            </div>
+        </div>
+        <button class="btn btn-logout" onclick="logout()">Cerrar sesión</button>
+    </div>
+
+    <!-- TABS -->
+    <div class="tabs">
+        <button class="tab-btn hidden" data-tab="tab-carga"    onclick="activarTab('tab-carga')">Registrar</button>
+        <button class="tab-btn hidden" data-tab="tab-historial" onclick="activarTab('tab-historial')">Historial</button>
+        <button class="tab-btn hidden" data-tab="tab-pagos"    onclick="activarTab('tab-pagos')">Pagos</button>
+        <button class="tab-btn hidden" data-tab="tab-admin"    onclick="activarTab('tab-admin')">Administración</button>
+    </div>
+
+
+    <!-- ── TAB: REGISTRAR ─────────────────────────────── -->
+    <div id="tab-carga" class="tab-content hidden">
+        <p class="section-title">Nueva pieza</p>
+
+        <div class="form-grid">
+            <div class="field">
+                <label>Nombre Pieza</label>
+                <input type="text" id="nombrePieza" placeholder="Ej: Correa dentada">
+            </div>
+            <div class="field">
+                <label>Código</label>
+                <input type="text" id="codigoPieza" placeholder="Ej: CD-001">
+            </div>
+            <div class="field">
+                <label>N° Factura</label>
+                <input type="text" id="numFactura" placeholder="Ej: 0001-00012345">
+            </div>
+            <div class="field">
+                <label>Estado</label>
+                <select id="tipoPieza">
+                    <option value="Nueva">Nueva</option>
+                    <option value="Repuesto">Repuesto</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>Cantidad</label>
+                <input type="number" id="cantidad" value="1" min="1">
+            </div>
+            <div class="field">
+                <label>Tipo de Precio</label>
+                <select id="modoPrecio" onchange="cambiarEtiquetaPrecio()">
+                    <option value="unitario">Precio por Unidad</option>
+                    <option value="total">Precio Total (Factura)</option>
+                </select>
+            </div>
+            <div class="field">
+                <label id="labelMonto">Monto ($)</label>
+                <input type="number" id="valor" class="highlight-input" placeholder="0.00" min="0">
+            </div>
+            <div class="field full-width">
+                <label>Descripción</label>
+                <textarea id="descripcion" placeholder="Observaciones adicionales..."></textarea>
+            </div>
+        </div>
+
+        <button class="btn btn-register" onclick="agregarDato()">✔ Registrar Pieza</button>
+    </div>
+
+
+    <!-- ── TAB: HISTORIAL ─────────────────────────────── -->
+    <div id="tab-historial" class="tab-content hidden">
+        <p class="section-title">Últimos registros</p>
+        <div id="historialList" class="historial-list"></div>
+    </div>
+
+
+    <!-- ── TAB: PAGOS (OFICINA) ───────────────────────── -->
+    <div id="tab-pagos" class="tab-content hidden">
+        <p class="section-title">Estado de pagos</p>
+
+        <div id="pagosResumen" class="pagos-resumen"></div>
+
+        <div class="pagos-filtros">
+            <button class="filtro-btn active" data-filtro="todos"      onclick="renderPagos('todos')">Todos</button>
+            <button class="filtro-btn"        data-filtro="pendientes" onclick="renderPagos('pendientes')">Pendientes</button>
+            <button class="filtro-btn"        data-filtro="pagados"    onclick="renderPagos('pagados')">Pagados</button>
+        </div>
+
+        <div id="pagosList" class="pagos-list"></div>
+    </div>
+
+
+    <!-- ── TAB: ADMINISTRACIÓN ────────────────────────── -->
+    <div id="tab-admin" class="tab-content hidden">
+        <p class="section-title">Herramientas</p>
+
+        <div class="admin-actions">
+            <button class="btn btn-excel"  onclick="exportarExcel()">⬇ Descargar Excel</button>
+            <button class="btn btn-danger" onclick="limpiarTodo()">✕ Borrar Historial</button>
+        </div>
+
+        <p class="section-title">Inversión registrada</p>
+        <div class="chart-wrapper">
+            <canvas id="miGrafica"></canvas>
+        </div>
+
+        <p class="section-title">Comparativa mensual</p>
+        <div id="statsGrid" class="stats-grid"></div>
+    </div>
+
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
