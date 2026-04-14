@@ -4,6 +4,7 @@ let miGrafica   = null;
 
 const CLAVES = {
     guillermo: 'Guillermo123456',
+    romero:    'Romero.2026',
     admin:     'Admin.2026',
     oficina:   'Oficina.2026'
 };
@@ -29,16 +30,15 @@ function login() {
     document.getElementById('loginSection').classList.add('hidden');
     document.getElementById('mainSection').classList.remove('hidden');
 
-    const nombres = { guillermo: 'Guillermo', admin: 'Administrador', oficina: 'Oficina' };
+    const nombres = { guillermo: 'Guillermo', romero: 'Romero', admin: 'Administrador', oficina: 'Oficina' };
     document.getElementById('welcomeText').innerText = 'Hola, ' + nombres[user];
 
     const badge = document.getElementById('badge');
-    const colores = { guillermo: '#c8860a', admin: '#7a4a20', oficina: '#1a6080' };
-    const etiquetas = { guillermo: 'Carga', admin: 'Acceso Total', oficina: 'Pagos' };
+    const colores  = { guillermo: '#c8860a', romero: '#533ab7', admin: '#7a4a20', oficina: '#1a6080' };
+    const etiquetas = { guillermo: 'Carga', romero: 'Supervisor', admin: 'Acceso Total', oficina: 'Pagos' };
     badge.innerText = etiquetas[user];
     badge.style.backgroundColor = colores[user];
 
-    // Mostrar tabs según perfil
     document.querySelectorAll('.tab-btn').forEach(t => t.classList.add('hidden'));
     document.querySelectorAll('.tab-content').forEach(t => {
         t.classList.remove('active');
@@ -48,8 +48,12 @@ function login() {
     if (user === 'guillermo') {
         mostrarTabs(['tab-carga', 'tab-historial']);
         activarTab('tab-carga');
+    } else if (user === 'romero') {
+        mostrarTabs(['tab-carga', 'tab-historial', 'tab-pagos']);
+        activarTab('tab-carga');
+        renderPagos('todos');
     } else if (user === 'admin') {
-        mostrarTabs(['tab-carga', 'tab-historial', 'tab-admin']);
+        mostrarTabs(['tab-carga', 'tab-historial', 'tab-pagos', 'tab-admin']);
         activarTab('tab-carga');
         setTimeout(initChart, 100);
         actualizarComparador();
@@ -76,13 +80,10 @@ function activarTab(id) {
         c.classList.add('hidden');
     });
 
-    const btn = document.querySelector(`[data-tab="${id}"]`);
+    const btn     = document.querySelector(`[data-tab="${id}"]`);
     const content = document.getElementById(id);
-    if (btn) btn.classList.add('active');
-    if (content) {
-        content.classList.remove('hidden');
-        content.classList.add('active');
-    }
+    if (btn)     btn.classList.add('active');
+    if (content) { content.classList.remove('hidden'); content.classList.add('active'); }
 
     if (id === 'tab-historial') renderHistorial();
     if (id === 'tab-pagos')    renderPagos('todos');
@@ -126,7 +127,7 @@ function agregarDato() {
         Total:        precioTotal.toFixed(2),
         Modo_Ingreso: modo,
         Descripcion:  document.getElementById('descripcion').value.trim(),
-        Pagado:       false
+        EstadoPago:   'pendiente'   // pendiente | habilitado | pagado
     };
 
     inventario.push(registro);
@@ -139,13 +140,24 @@ function agregarDato() {
     document.getElementById('cantidad').value = '1';
 }
 
-/* ─── HISTORIAL (Guillermo / Admin) ──────────────────────*/
+/* ─── HISTORIAL ──────────────────────────────────────── */
+function puedeEliminar() {
+    return ['guillermo', 'romero', 'admin'].includes(userActual);
+}
+
+function eliminarRegistro(id) {
+    if (!puedeEliminar()) return;
+    if (!confirm('¿Eliminar este registro?')) return;
+    inventario = inventario.filter(r => r.id !== id);
+    guardar();
+    renderHistorial();
+}
+
 function renderHistorial() {
     const lista = document.getElementById('historialList');
     if (!lista) return;
 
-    // Guillermo ve solo los suyos; admin ve todos
-    const items = userActual === 'admin'
+    const items = userActual === 'admin' || userActual === 'romero'
         ? [...inventario].reverse()
         : [...inventario].filter(r => r.Usuario === 'guillermo').reverse();
 
@@ -154,8 +166,15 @@ function renderHistorial() {
         return;
     }
 
-    lista.innerHTML = items.slice(0, 50).map(r => `
-        <div class="historial-item">
+    lista.innerHTML = items.slice(0, 50).map(r => {
+        const ep = r.EstadoPago || 'pendiente';
+        const estadoInfo = estadoPagoInfo(ep);
+        const btnEliminar = puedeEliminar()
+            ? `<button class="btn-eliminar" onclick="eliminarRegistro(${r.id})" title="Eliminar">✕</button>`
+            : '';
+        return `
+        <div class="historial-item estado-${ep}">
+            <div class="estado-barra" style="background:${estadoInfo.color}"></div>
             <div class="historial-info">
                 <div class="historial-nombre">${r.Pieza}</div>
                 <div class="historial-meta">
@@ -164,21 +183,39 @@ function renderHistorial() {
                     ${r.Codigo  ? '· Cód: ' + r.Codigo  : ''}
                 </div>
             </div>
-            <div style="text-align:right;flex-shrink:0;">
-                <div class="historial-total">$${parseFloat(r.Total).toLocaleString('es-AR')}</div>
-                <div class="historial-fecha">${r.Fecha} ${r.Hora}</div>
+            <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+                <div style="text-align:right;">
+                    <div class="historial-total">$${parseFloat(r.Total).toLocaleString('es-AR')}</div>
+                    <div class="historial-fecha">${r.Fecha} ${r.Hora}</div>
+                    <span class="estado-pill" style="background:${estadoInfo.bg};color:${estadoInfo.color};">${estadoInfo.label}</span>
+                </div>
+                ${btnEliminar}
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 }
 
-/* ─── PAGOS (Oficina) ─────────────────────────────────── */
+/* ─── HELPERS ESTADO PAGO ─────────────────────────────── */
+function estadoPagoInfo(ep) {
+    if (ep === 'habilitado') return { label: 'Habilitado', color: '#854f0b', bg: '#faeeda' };
+    if (ep === 'pagado')     return { label: 'Pagado',     color: '#27500a', bg: '#eaf3de' };
+    return                          { label: 'Pendiente',  color: '#791f1f', bg: '#fcebeb' };
+}
+
+/* ─── PAGOS ───────────────────────────────────────────── */
 let filtroActual = 'todos';
+
+function puedeHabilitar() {
+    return ['romero', 'admin'].includes(userActual);
+}
+
+function puedeMarcarPagado() {
+    return ['romero', 'admin', 'oficina'].includes(userActual);
+}
 
 function renderPagos(filtro) {
     filtroActual = filtro;
 
-    // Actualizar botones de filtro
     document.querySelectorAll('.filtro-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.filtro === filtro);
     });
@@ -187,11 +224,14 @@ function renderPagos(filtro) {
     const resumen = document.getElementById('pagosResumen');
     if (!lista) return;
 
-    const total    = inventario.length;
-    const pagados  = inventario.filter(r => r.Pagado).length;
-    const pendientes = total - pagados;
-    const sumaPagada   = inventario.filter(r => r.Pagado).reduce((a, r) => a + parseFloat(r.Total), 0);
-    const sumaPendiente= inventario.filter(r => !r.Pagado).reduce((a, r) => a + parseFloat(r.Total), 0);
+    const total      = inventario.length;
+    const pagados    = inventario.filter(r => (r.EstadoPago || 'pendiente') === 'pagado').length;
+    const habilitados= inventario.filter(r => (r.EstadoPago || 'pendiente') === 'habilitado').length;
+    const pendientes = total - pagados - habilitados;
+
+    const sumaPagada    = inventario.filter(r => (r.EstadoPago||'pendiente')==='pagado').reduce((a,r)=>a+parseFloat(r.Total),0);
+    const sumaHabilitada= inventario.filter(r => (r.EstadoPago||'pendiente')==='habilitado').reduce((a,r)=>a+parseFloat(r.Total),0);
+    const sumaPendiente = inventario.filter(r => (r.EstadoPago||'pendiente')==='pendiente').reduce((a,r)=>a+parseFloat(r.Total),0);
 
     if (resumen) {
         resumen.innerHTML = `
@@ -199,28 +239,53 @@ function renderPagos(filtro) {
                 <div class="resumen-label">Total registros</div>
                 <div class="resumen-valor">${total}</div>
             </div>
-            <div class="resumen-card pagado-card">
-                <div class="resumen-label">Pagado</div>
-                <div class="resumen-valor">$${sumaPagada.toLocaleString('es-AR', {maximumFractionDigits:0})}</div>
+            <div class="resumen-card" style="background:#fcebeb;border-color:#f09595;">
+                <div class="resumen-label" style="color:#791f1f;">Pendiente</div>
+                <div class="resumen-valor" style="color:#791f1f;">$${sumaPendiente.toLocaleString('es-AR',{maximumFractionDigits:0})}</div>
             </div>
-            <div class="resumen-card pendiente-card">
-                <div class="resumen-label">Pendiente</div>
-                <div class="resumen-valor">$${sumaPendiente.toLocaleString('es-AR', {maximumFractionDigits:0})}</div>
+            <div class="resumen-card" style="background:#faeeda;border-color:#ef9f27;">
+                <div class="resumen-label" style="color:#854f0b;">Habilitado</div>
+                <div class="resumen-valor" style="color:#854f0b;">$${sumaHabilitada.toLocaleString('es-AR',{maximumFractionDigits:0})}</div>
+            </div>
+            <div class="resumen-card" style="background:#eaf3de;border-color:#97c459;">
+                <div class="resumen-label" style="color:#27500a;">Pagado</div>
+                <div class="resumen-valor" style="color:#27500a;">$${sumaPagada.toLocaleString('es-AR',{maximumFractionDigits:0})}</div>
             </div>
         `;
     }
 
     let items = [...inventario].reverse();
-    if (filtro === 'pagados')   items = items.filter(r => r.Pagado);
-    if (filtro === 'pendientes') items = items.filter(r => !r.Pagado);
+    if (filtro === 'pendientes')  items = items.filter(r => (r.EstadoPago||'pendiente') === 'pendiente');
+    if (filtro === 'habilitados') items = items.filter(r => (r.EstadoPago||'pendiente') === 'habilitado');
+    if (filtro === 'pagados')     items = items.filter(r => (r.EstadoPago||'pendiente') === 'pagado');
 
     if (items.length === 0) {
         lista.innerHTML = '<p class="pagos-empty">No hay registros en esta categoría.</p>';
         return;
     }
 
-    lista.innerHTML = items.map(r => `
-        <div class="pago-item ${r.Pagado ? 'pagado' : ''}" id="pago-${r.id}">
+    lista.innerHTML = items.map(r => {
+        const ep = r.EstadoPago || 'pendiente';
+        const info = estadoPagoInfo(ep);
+
+        let acciones = '';
+
+        if (ep === 'pendiente' && puedeHabilitar()) {
+            acciones += `<button class="pago-toggle" onclick="cambiarEstadoPago(${r.id},'habilitado')" style="border-color:#ef9f27;color:#854f0b;">Habilitar</button>`;
+        }
+        if (ep === 'habilitado' && puedeMarcarPagado()) {
+            acciones += `<button class="pago-toggle pagado-btn" onclick="cambiarEstadoPago(${r.id},'pagado')" style="border-color:#639922;color:#27500a;">Marcar pagado</button>`;
+        }
+        if (ep === 'pagado' && puedeHabilitar()) {
+            acciones += `<button class="pago-toggle" onclick="cambiarEstadoPago(${r.id},'habilitado')" style="border-color:#ef9f27;color:#854f0b;font-size:11px;">Revertir</button>`;
+        }
+
+        const btnEliminar = puedeEliminar()
+            ? `<button class="btn-eliminar" onclick="eliminarPago(${r.id})" title="Eliminar">✕</button>`
+            : '';
+
+        return `
+        <div class="pago-item" style="border-left:4px solid ${info.color};padding-left:14px;" id="pago-${r.id}">
             <div class="pago-info">
                 <div class="pago-nombre">${r.Pieza}</div>
                 <div class="pago-meta">
@@ -229,20 +294,39 @@ function renderPagos(filtro) {
                 </div>
             </div>
             <div class="pago-right">
-                <div class="pago-total">$${parseFloat(r.Total).toLocaleString('es-AR')}</div>
-                <button class="pago-toggle ${r.Pagado ? 'pagado-btn' : ''}" onclick="togglePago(${r.id})">
-                    <span class="pago-dot"></span>
-                    ${r.Pagado ? 'Pagado' : 'Pendiente'}
-                </button>
+                <div>
+                    <div class="pago-total">$${parseFloat(r.Total).toLocaleString('es-AR')}</div>
+                    <span class="estado-pill" style="background:${info.bg};color:${info.color};">${info.label}</span>
+                </div>
+                ${acciones}
+                ${btnEliminar}
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 }
 
-function togglePago(id) {
+function cambiarEstadoPago(id, nuevoEstado) {
     const idx = inventario.findIndex(r => r.id === id);
     if (idx === -1) return;
-    inventario[idx].Pagado = !inventario[idx].Pagado;
+
+    const ep = inventario[idx].EstadoPago || 'pendiente';
+
+    if (nuevoEstado === 'habilitado' && !puedeHabilitar()) return;
+    if (nuevoEstado === 'pagado'     && !puedeMarcarPagado()) return;
+    if (ep !== 'habilitado' && nuevoEstado === 'pagado') {
+        alert('Solo se pueden pagar pedidos habilitados.');
+        return;
+    }
+
+    inventario[idx].EstadoPago = nuevoEstado;
+    guardar();
+    renderPagos(filtroActual);
+}
+
+function eliminarPago(id) {
+    if (!puedeEliminar()) return;
+    if (!confirm('¿Eliminar este pedido?')) return;
+    inventario = inventario.filter(r => r.id !== id);
     guardar();
     renderPagos(filtroActual);
 }
@@ -274,9 +358,7 @@ function initChart() {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: {
-                    labels: { color: '#7a4a20', font: { family: 'Nunito', weight: '700', size: 13 } }
-                }
+                legend: { labels: { color: '#7a4a20', font: { family: 'Nunito', weight: '700', size: 13 } } }
             },
             scales: {
                 x: { ticks: { color: '#a07840', font: { family: 'Nunito', size: 11 } }, grid: { color: 'rgba(200,160,90,0.12)' } },
@@ -318,7 +400,7 @@ function exportarExcel() {
     XLSX.writeFile(wb, 'Inventario_RomeroPanificados.xlsx');
 }
 
-/* ─── LIMPIAR ─────────────────────────────────────────── */
+/* ─── LIMPIAR TODO ────────────────────────────────────── */
 function limpiarTodo() {
     if (confirm('¿Borrar todo el historial? Esta acción no se puede deshacer.')) {
         localStorage.removeItem('datosInventario');
