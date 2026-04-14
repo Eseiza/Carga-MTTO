@@ -10,27 +10,19 @@
 </head>
 <body>
 
-<!-- ════════════════════════════════════════════════════
-     LOGIN
-════════════════════════════════════════════════════ -->
 <div id="loginSection" class="login-wrap">
     <div class="login-card">
-
         <div class="login-header">
-            <img
-                src="https://www.romeropanificados.com.ar/wp-content/uploads/2023/01/Recurso-8.png"
-                alt="Romero Panificados"
-                class="login-logo"
-                onerror="this.style.display='none'"
-            >
+            <img src="https://www.romeropanificados.com.ar/wp-content/uploads/2023/01/Recurso-8.png"
+                 alt="Romero Panificados" class="login-logo" onerror="this.style.display='none'">
             <p>Inventario · Mantenimiento</p>
         </div>
-
         <div class="login-body">
             <div class="field">
                 <label>¿Quién sos?</label>
                 <select id="userSelect">
                     <option value="guillermo">Guillermo (Carga)</option>
+                    <option value="romero">Romero (Supervisor)</option>
                     <option value="oficina">Oficina</option>
                     <option value="admin">Administrador</option>
                 </select>
@@ -41,38 +33,24 @@
             </div>
             <button class="btn btn-primary" onclick="login()">Entrar</button>
         </div>
-
         <div class="login-footer">
-            <img
-                src="https://www.romeropanificados.com.ar/wp-content/uploads/2023/01/Recurso-8.png"
-                alt="Romero"
-                class="login-footer-logo"
-                onerror="this.style.display='none'"
-            >
+            <img src="https://www.romeropanificados.com.ar/wp-content/uploads/2023/01/Recurso-8.png"
+                 alt="Romero" class="login-footer-logo" onerror="this.style.display='none'">
             <div class="footer-dot"></div>
             <span>Sistema de Mantenimiento</span>
             <div class="footer-dot"></div>
             <span>TI 2026</span>
         </div>
-
     </div>
 </div>
 
 
-<!-- ════════════════════════════════════════════════════
-     PANEL PRINCIPAL
-════════════════════════════════════════════════════ -->
 <div id="mainSection" class="container hidden">
 
-    <!-- HEADER -->
     <div class="panel-header">
         <div class="panel-header-left">
-            <img
-                src="https://www.romeropanificados.com.ar/wp-content/uploads/2023/01/Recurso-8.png"
-                alt="Romero Panificados"
-                class="panel-logo"
-                onerror="this.style.display='none'"
-            >
+            <img src="https://www.romeropanificados.com.ar/wp-content/uploads/2023/01/Recurso-8.png"
+                 alt="Romero Panificados" class="panel-logo" onerror="this.style.display='none'">
             <div class="panel-header-text">
                 <h2 id="welcomeText">Panel</h2>
                 <span id="badge" class="role-badge"></span>
@@ -81,7 +59,6 @@
         <button class="btn btn-logout" onclick="logout()">Cerrar sesión</button>
     </div>
 
-    <!-- TABS -->
     <div class="tabs">
         <button class="tab-btn hidden" data-tab="tab-carga"    onclick="activarTab('tab-carga')">Registrar</button>
         <button class="tab-btn hidden" data-tab="tab-historial" onclick="activarTab('tab-historial')">Historial</button>
@@ -90,10 +67,9 @@
     </div>
 
 
-    <!-- ── TAB: REGISTRAR ─────────────────────────────── -->
+    <!-- ── REGISTRAR ─────────────────────────────────── -->
     <div id="tab-carga" class="tab-content hidden">
         <p class="section-title">Nueva pieza</p>
-
         <div class="form-grid">
             <div class="field">
                 <label>Nombre Pieza</label>
@@ -134,48 +110,47 @@
                 <textarea id="descripcion" placeholder="Observaciones adicionales..."></textarea>
             </div>
         </div>
-
         <button class="btn btn-register" onclick="agregarDato()">✔ Registrar Pieza</button>
     </div>
 
 
-    <!-- ── TAB: HISTORIAL ─────────────────────────────── -->
+    <!-- ── HISTORIAL ─────────────────────────────────── -->
     <div id="tab-historial" class="tab-content hidden">
         <p class="section-title">Últimos registros</p>
+        <div class="leyenda-estados">
+            <span class="leyenda-item" style="background:#fcebeb;color:#791f1f;">● Pendiente</span>
+            <span class="leyenda-item" style="background:#faeeda;color:#854f0b;">● Habilitado</span>
+            <span class="leyenda-item" style="background:#eaf3de;color:#27500a;">● Pagado</span>
+        </div>
         <div id="historialList" class="historial-list"></div>
     </div>
 
 
-    <!-- ── TAB: PAGOS (OFICINA) ───────────────────────── -->
+    <!-- ── PAGOS ─────────────────────────────────────── -->
     <div id="tab-pagos" class="tab-content hidden">
         <p class="section-title">Estado de pagos</p>
-
         <div id="pagosResumen" class="pagos-resumen"></div>
-
         <div class="pagos-filtros">
-            <button class="filtro-btn active" data-filtro="todos"      onclick="renderPagos('todos')">Todos</button>
-            <button class="filtro-btn"        data-filtro="pendientes" onclick="renderPagos('pendientes')">Pendientes</button>
-            <button class="filtro-btn"        data-filtro="pagados"    onclick="renderPagos('pagados')">Pagados</button>
+            <button class="filtro-btn active" data-filtro="todos"       onclick="renderPagos('todos')">Todos</button>
+            <button class="filtro-btn"        data-filtro="pendientes"  onclick="renderPagos('pendientes')">Pendientes</button>
+            <button class="filtro-btn"        data-filtro="habilitados" onclick="renderPagos('habilitados')">Habilitados</button>
+            <button class="filtro-btn"        data-filtro="pagados"     onclick="renderPagos('pagados')">Pagados</button>
         </div>
-
         <div id="pagosList" class="pagos-list"></div>
     </div>
 
 
-    <!-- ── TAB: ADMINISTRACIÓN ────────────────────────── -->
+    <!-- ── ADMINISTRACIÓN ────────────────────────────── -->
     <div id="tab-admin" class="tab-content hidden">
         <p class="section-title">Herramientas</p>
-
         <div class="admin-actions">
             <button class="btn btn-excel"  onclick="exportarExcel()">⬇ Descargar Excel</button>
             <button class="btn btn-danger" onclick="limpiarTodo()">✕ Borrar Historial</button>
         </div>
-
         <p class="section-title">Inversión registrada</p>
         <div class="chart-wrapper">
             <canvas id="miGrafica"></canvas>
         </div>
-
         <p class="section-title">Comparativa mensual</p>
         <div id="statsGrid" class="stats-grid"></div>
     </div>
