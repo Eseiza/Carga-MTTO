@@ -1,5 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
 import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-storage.js";
 
 const firebaseConfig = {
     apiKey:            "AIzaSyD6uhwhiF-_j5oyu4NBZug3zU7SHwaY4_M",
@@ -11,14 +12,61 @@ const firebaseConfig = {
     measurementId:     "G-XR2NQHQSM5"
 };
 
-const app = initializeApp(firebaseConfig);
-const db  = getFirestore(app);
-const COL = "inventario";
+const app     = initializeApp(firebaseConfig);
+const db      = getFirestore(app);
+const storage = getStorage(app);
+const COL     = "inventario";
 
 let inventario  = [];
 let userActual  = null;
 let miGrafica   = null;
 let unsubscribe = null;
+
+/* ─── ADJUNTO: UI ─────────────────────────────────────── */
+window.mostrarNombreArchivo = function() {
+    const input   = document.getElementById('archivoAdjunto');
+    const label   = document.getElementById('adjuntoLabel');
+    const btnQ    = document.getElementById('btnQuitarAdjunto');
+    const preview = document.getElementById('previewAdjunto');
+
+    if (!input.files || !input.files[0]) return;
+    const file = input.files[0];
+    label.textContent = file.name;
+    btnQ.classList.remove('hidden');
+
+    preview.classList.remove('hidden');
+    preview.innerHTML = '';
+
+    if (file.type.startsWith('image/')) {
+        const url = URL.createObjectURL(file);
+        preview.innerHTML = `<img src="${url}" alt="preview" class="preview-img">`;
+    } else if (file.type === 'application/pdf') {
+        preview.innerHTML = `
+            <div class="preview-pdf">
+                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24"
+                     fill="none" stroke="#c8420a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                    <polyline points="10 9 9 9 8 9"/>
+                </svg>
+                <span>${file.name}</span>
+            </div>`;
+    }
+};
+
+window.quitarAdjunto = function() {
+    const input   = document.getElementById('archivoAdjunto');
+    const label   = document.getElementById('adjuntoLabel');
+    const btnQ    = document.getElementById('btnQuitarAdjunto');
+    const preview = document.getElementById('previewAdjunto');
+    input.value   = '';
+    label.textContent = 'Adjuntar archivo';
+    btnQ.classList.add('hidden');
+    preview.classList.add('hidden');
+    preview.innerHTML = '';
+};
 
 /* ─── PRECIO ──────────────────────────────────────────── */
 function cambiarEtiquetaPrecio() {
@@ -148,6 +196,29 @@ async function agregarDato() {
     else                     { precioTotal = monto; precioUnitario = monto / cant; }
 
     const ahora = new Date();
+
+    // ── Subir archivo adjunto si existe ──
+    let adjuntoURL  = '';
+    let adjuntoNombre = '';
+    let adjuntoTipo = '';
+    const fileInput = document.getElementById('archivoAdjunto');
+    const file      = fileInput.files && fileInput.files[0];
+
+    if (file) {
+        try {
+            const ext      = file.name.split('.').pop();
+            const nombreArchivo = `adjuntos/${ahora.getTime()}_${nombre.replace(/\s+/g,'_')}.${ext}`;
+            const storageRef   = ref(storage, nombreArchivo);
+            await uploadBytes(storageRef, file);
+            adjuntoURL    = await getDownloadURL(storageRef);
+            adjuntoNombre = file.name;
+            adjuntoTipo   = file.type;
+        } catch (e) {
+            console.warn('No se pudo subir el adjunto:', e.message);
+            // Continúa el registro sin adjunto si falla el upload
+        }
+    }
+
     const registro = {
         timestamp:    ahora.getTime(),
         Mes:          ahora.toLocaleString('es-ES', { month: 'long' }),
@@ -157,13 +228,17 @@ async function agregarDato() {
         Pieza:        nombre,
         Codigo:       document.getElementById('codigoPieza').value.trim(),
         Factura:      document.getElementById('numFactura').value.trim(),
-        Estado:       document.getElementById('tipoPieza').value,
+        Proyecto:     document.getElementById('proyectoPieza').value,   // ← Nuevo
+        Estado:       document.getElementById('tipoPieza').value,        // Nueva / Usada
         Cantidad:     cant,
         Precio_Unit:  precioUnitario.toFixed(2),
         Total:        precioTotal.toFixed(2),
         Modo_Ingreso: modo,
         Descripcion:  document.getElementById('descripcion').value.trim(),
-        EstadoPago:   'pendiente'
+        EstadoPago:   'pendiente',
+        AdjuntoURL:   adjuntoURL,
+        AdjuntoNombre: adjuntoNombre,
+        AdjuntoTipo:  adjuntoTipo
     };
 
     try {
@@ -173,6 +248,7 @@ async function agregarDato() {
             document.getElementById(id).value = '';
         });
         document.getElementById('cantidad').value = '1';
+        window.quitarAdjunto();
     } catch (e) {
         alert('Error al guardar: ' + e.message);
     }
@@ -196,6 +272,31 @@ async function eliminarPago(firestoreId) {
 }
 window.eliminarPago = eliminarPago;
 
+/* ─── RENDER: ÍCONO ADJUNTO ───────────────────────────── */
+function adjuntoHTML(r) {
+    if (!r.AdjuntoURL) return '';
+    const esPDF = r.AdjuntoTipo === 'application/pdf' || (r.AdjuntoNombre && r.AdjuntoNombre.toLowerCase().endsWith('.pdf'));
+    if (esPDF) {
+        return `<a href="${r.AdjuntoURL}" target="_blank" class="adjunto-link adjunto-pdf" title="${r.AdjuntoNombre || 'Ver PDF'}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            PDF
+        </a>`;
+    }
+    return `<a href="${r.AdjuntoURL}" target="_blank" class="adjunto-link adjunto-img" title="${r.AdjuntoNombre || 'Ver imagen'}">
+        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+        </svg>
+        Foto
+    </a>`;
+}
+
 /* ─── HISTORIAL ───────────────────────────────────────── */
 function renderHistorial() {
     const lista = document.getElementById('historialList');
@@ -216,11 +317,15 @@ function renderHistorial() {
         const btnEliminar = puedeEliminar()
             ? `<button class="btn-eliminar" onclick="eliminarRegistro('${r.firestoreId}')" title="Eliminar">✕</button>`
             : '';
+        // Proyecto badge
+        const proyectoBadge = r.Proyecto
+            ? `<span class="proyecto-badge proyecto-${r.Proyecto.toLowerCase()}">${r.Proyecto}</span>`
+            : '';
         return `
         <div class="historial-item">
             <div class="estado-barra" style="background:${info.color}"></div>
             <div class="historial-info">
-                <div class="historial-nombre">${r.Pieza}</div>
+                <div class="historial-nombre">${r.Pieza} ${proyectoBadge}</div>
                 <div class="historial-meta">
                     ${r.Estado} · Cant: ${r.Cantidad}
                     ${r.Factura ? '· Fac: ' + r.Factura : ''}
@@ -232,6 +337,7 @@ function renderHistorial() {
                     <div class="historial-total">$${parseFloat(r.Total).toLocaleString('es-AR')}</div>
                     <div class="historial-fecha">${r.Fecha} ${r.Hora}</div>
                     <span class="estado-pill" style="background:${info.bg};color:${info.color};">${info.label}</span>
+                    ${adjuntoHTML(r)}
                 </div>
                 ${btnEliminar}
             </div>
@@ -302,10 +408,14 @@ function renderPagos(filtro) {
             ? `<button class="btn-eliminar" onclick="eliminarPago('${r.firestoreId}')" title="Eliminar">✕</button>`
             : '';
 
+        const proyectoBadge = r.Proyecto
+            ? `<span class="proyecto-badge proyecto-${r.Proyecto.toLowerCase()}">${r.Proyecto}</span>`
+            : '';
+
         return `
         <div class="pago-item" style="border-left:4px solid ${info.color};padding-left:14px;">
             <div class="pago-info">
-                <div class="pago-nombre">${r.Pieza}</div>
+                <div class="pago-nombre">${r.Pieza} ${proyectoBadge}</div>
                 <div class="pago-meta">
                     ${r.Fecha} · ${r.Estado} · Cant: ${r.Cantidad}
                     ${r.Factura ? '· Fac: ' + r.Factura : ''}
@@ -315,6 +425,7 @@ function renderPagos(filtro) {
                 <div>
                     <div class="pago-total">$${parseFloat(r.Total).toLocaleString('es-AR')}</div>
                     <span class="estado-pill" style="background:${info.bg};color:${info.color};">${info.label}</span>
+                    ${adjuntoHTML(r)}
                 </div>
                 ${acciones}
                 ${btnEliminar}
@@ -421,3 +532,7 @@ async function limpiarTodo() {
     }
 }
 window.limpiarTodo = limpiarTodo;
+
+/* ─── LEYENDA ESTADOS (historial) ─────────────────────── */
+// Compatible con registros viejos que tenían Estado: "Nueva"/"Repuesto"
+// Ahora Estado = "Nueva"/"Usada" y Proyecto = "Nuevo"/"Repuesto"
