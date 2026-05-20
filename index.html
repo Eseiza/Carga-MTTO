@@ -10,6 +10,7 @@
 </head>
 <body>
 
+<!-- ══ LOGIN ═══════════════════════════════════════════ -->
 <div id="loginSection" class="login-wrap">
     <div class="login-card">
         <div class="login-header">
@@ -40,7 +41,14 @@
     </div>
 </div>
 
+<!-- ══ MODAL DETALLE / EDICIÓN ══════════════════════════ -->
+<div id="modalOverlay" class="modal-overlay">
+    <div class="modal-card" id="modalContent">
+        <!-- contenido inyectado por JS -->
+    </div>
+</div>
 
+<!-- ══ PANEL PRINCIPAL ══════════════════════════════════ -->
 <div id="mainSection" class="container hidden">
 
     <div class="panel-header">
@@ -56,12 +64,11 @@
     </div>
 
     <div class="tabs">
-        <button class="tab-btn hidden" data-tab="tab-carga"    onclick="activarTab('tab-carga')">Registrar</button>
+        <button class="tab-btn hidden" data-tab="tab-carga"     onclick="activarTab('tab-carga')">Registrar</button>
         <button class="tab-btn hidden" data-tab="tab-historial" onclick="activarTab('tab-historial')">Historial</button>
-        <button class="tab-btn hidden" data-tab="tab-pagos"    onclick="activarTab('tab-pagos')">Pagos</button>
-        <button class="tab-btn hidden" data-tab="tab-admin"    onclick="activarTab('tab-admin')">Administración</button>
+        <button class="tab-btn hidden" data-tab="tab-pagos"     onclick="activarTab('tab-pagos')">Pagos</button>
+        <button class="tab-btn hidden" data-tab="tab-admin"     onclick="activarTab('tab-admin')">Administración</button>
     </div>
-
 
     <!-- ── REGISTRAR ─────────────────────────────────── -->
     <div id="tab-carga" class="tab-content hidden">
@@ -79,8 +86,6 @@
                 <label>N° Factura</label>
                 <input type="text" id="numFactura" placeholder="Ej: 0001-00012345">
             </div>
-
-            <!-- PROYECTO: Nuevo o Repuesto -->
             <div class="field">
                 <label>Proyecto</label>
                 <select id="proyectoPieza">
@@ -88,8 +93,6 @@
                     <option value="Repuesto">Repuesto</option>
                 </select>
             </div>
-
-            <!-- ESTADO: Nueva o Usada -->
             <div class="field">
                 <label>Estado</label>
                 <select id="tipoPieza">
@@ -97,7 +100,6 @@
                     <option value="Usada">Usada</option>
                 </select>
             </div>
-
             <div class="field">
                 <label>Cantidad</label>
                 <input type="number" id="cantidad" value="1" min="1">
@@ -117,13 +119,10 @@
                 <label>Descripción</label>
                 <textarea id="descripcion" placeholder="Observaciones adicionales..."></textarea>
             </div>
-
-            <!-- ADJUNTAR ARCHIVO -->
             <div class="field full-width">
                 <label>Adjuntar Factura / Foto</label>
                 <div class="adjunto-wrap">
                     <label class="btn-clip" for="archivoAdjunto" title="Adjuntar archivo">
-                        <!-- Ícono clip SVG -->
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
                              fill="none" stroke="currentColor" stroke-width="2.2"
                              stroke-linecap="round" stroke-linejoin="round">
@@ -137,14 +136,11 @@
                     <button type="button" id="btnQuitarAdjunto" class="btn-quitar-adjunto hidden"
                             onclick="quitarAdjunto()" title="Quitar archivo">✕</button>
                 </div>
-                <!-- Preview imagen -->
                 <div id="previewAdjunto" class="preview-adjunto hidden"></div>
             </div>
-
         </div>
         <button class="btn btn-register" onclick="agregarDato()">✔ Registrar Pieza</button>
     </div>
-
 
     <!-- ── HISTORIAL ─────────────────────────────────── -->
     <div id="tab-historial" class="tab-content hidden">
@@ -154,9 +150,9 @@
             <span class="leyenda-item" style="background:#faeeda;color:#854f0b;">● Habilitado</span>
             <span class="leyenda-item" style="background:#eaf3de;color:#27500a;">● Pagado</span>
         </div>
+        <p class="hint-click">Hacé clic en un registro para ver el detalle completo</p>
         <div id="historialList" class="historial-list"></div>
     </div>
-
 
     <!-- ── PAGOS ─────────────────────────────────────── -->
     <div id="tab-pagos" class="tab-content hidden">
@@ -168,9 +164,9 @@
             <button class="filtro-btn"        data-filtro="habilitados" onclick="renderPagos('habilitados')">Habilitados</button>
             <button class="filtro-btn"        data-filtro="pagados"     onclick="renderPagos('pagados')">Pagados</button>
         </div>
+        <p class="hint-click">Hacé clic en un registro para ver el detalle completo</p>
         <div id="pagosList" class="pagos-list"></div>
     </div>
-
 
     <!-- ── ADMINISTRACIÓN ────────────────────────────── -->
     <div id="tab-admin" class="tab-content hidden">
