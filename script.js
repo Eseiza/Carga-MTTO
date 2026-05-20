@@ -1,786 +1,1060 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-storage.js";
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,600;1,400&family=Nunito:wght@400;600;700&display=swap');
 
-const firebaseConfig = {
-    apiKey:            "AIzaSyD6uhwhiF-_j5oyu4NBZug3zU7SHwaY4_M",
-    authDomain:        "gastos-mtto.firebaseapp.com",
-    projectId:         "gastos-mtto",
-    storageBucket:     "gastos-mtto.firebasestorage.app",
-    messagingSenderId: "699211889893",
-    appId:             "1:699211889893:web:d2a7b9aa684285339ea80c",
-    measurementId:     "G-XR2NQHQSM5"
-};
+/* ─── VARIABLES ───────────────────────────────────────── */
+:root {
+    --gold:        #c8860a;
+    --red:         #c8420a;
+    --brown:       #3a200a;
+    --brown-mid:   #7a4a20;
+    --brown-light: #a07840;
+    --cream:       #fdf8f0;
+    --cream-dark:  #f7f0e6;
+    --cream-mid:   #fdf5e4;
+    --border:      #ddd0b8;
+    --border-light:#f0e4cc;
+    --green:       #3d7a3a;
+    --shadow:      0 8px 40px rgba(100,60,10,0.10);
+}
 
-const app     = initializeApp(firebaseConfig);
-const db      = getFirestore(app);
-const storage = getStorage(app);
-const COL     = "inventario";
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
-let inventario  = [];
-let userActual  = null;
-let miGrafica   = null;
-let unsubscribe = null;
+body {
+    font-family: 'Nunito', sans-serif;
+    background: var(--cream-dark);
+    background-image:
+        radial-gradient(circle at 20% 20%, rgba(200,134,10,0.06) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(200,66,10,0.04) 0%, transparent 50%);
+    min-height: 100vh;
+    padding: 24px 16px;
+}
+
+.hidden { display: none !important; }
+
+/* ─── LOGIN ───────────────────────────────────────────── */
+.login-wrap {
+    min-height: calc(100vh - 48px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-card {
+    width: 100%;
+    max-width: 400px;
+    background: #fff;
+    border-radius: 20px;
+    border: 1.5px solid var(--border);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+
+.login-header {
+    padding: 32px 36px 24px;
+    border-bottom: 1.5px solid var(--border-light);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.login-logo { height: 56px; object-fit: contain; }
+
+.login-header p {
+    font-size: 13px;
+    color: var(--brown-light);
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+.login-body { padding: 26px 36px 32px; }
+
+.login-footer {
+    padding: 12px 36px;
+    background: var(--cream-mid);
+    border-top: 1.5px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.footer-dot {
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: #c8a060;
+    flex-shrink: 0;
+}
+
+.login-footer span {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--brown-light);
+    letter-spacing: 0.4px;
+}
+
+/* ─── CAMPOS ──────────────────────────────────────────── */
+.field { margin-bottom: 18px; }
+
+.field label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--brown-light);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 7px;
+}
+
+.field input,
+.field select,
+.field textarea {
+    width: 100%;
+    padding: 11px 15px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    font-family: 'Nunito', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--brown);
+    background: var(--cream);
+    transition: border-color 0.2s, background 0.2s;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+    outline: none;
+    border-color: var(--gold);
+    background: #fff;
+}
+
+.field textarea { resize: vertical; min-height: 64px; }
+
+.highlight-input {
+    border-color: var(--gold) !important;
+    background: #fffbf0 !important;
+}
+
+/* ─── BOTONES ─────────────────────────────────────────── */
+.btn {
+    cursor: pointer;
+    font-family: 'Nunito', sans-serif;
+    font-weight: 700;
+    border-radius: 10px;
+    border: none;
+    transition: background 0.2s, color 0.2s, transform 0.1s;
+}
+
+.btn:active { transform: scale(0.98); }
+
+.btn-primary {
+    width: 100%;
+    padding: 14px;
+    background: var(--cream);
+    color: var(--red);
+    border: 2px solid var(--red) !important;
+    font-family: 'Lora', serif;
+    font-size: 16px;
+    font-weight: 600;
+    margin-top: 8px;
+}
+
+.btn-primary:hover { background: var(--red); color: var(--cream); }
+
+.btn-register {
+    width: 100%;
+    padding: 14px;
+    background: var(--brown);
+    color: var(--cream);
+    font-family: 'Lora', serif;
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 0;
+}
+
+.btn-register:hover { background: #5a3010; }
+
+.btn-excel {
+    flex: 1;
+    padding: 11px 16px;
+    background: var(--green);
+    color: #fff;
+    font-size: 13px;
+}
+
+.btn-excel:hover { background: #2d5e2a; }
+
+.btn-danger {
+    padding: 11px 16px;
+    background: #b83030;
+    color: #fff;
+    font-size: 13px;
+}
+
+.btn-danger:hover { background: #902020; }
+
+.btn-logout {
+    padding: 7px 16px;
+    background: var(--cream-mid);
+    color: var(--brown-mid);
+    border: 1.5px solid var(--border) !important;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.btn-logout:hover { background: var(--border-light); }
+
+/* ─── PANEL PRINCIPAL ─────────────────────────────────── */
+.container {
+    max-width: 1040px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 20px;
+    border: 1.5px solid var(--border);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 32px;
+    background: var(--cream-mid);
+    border-bottom: 1.5px solid var(--border-light);
+}
+
+.panel-header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.panel-logo { height: 40px; object-fit: contain; }
+
+.panel-header-text h2 {
+    font-family: 'Lora', serif;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--brown);
+    line-height: 1.2;
+}
+
+.role-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-top: 3px;
+}
+
+/* ─── TABS ────────────────────────────────────────────── */
+.tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1.5px solid var(--border-light);
+    background: #fff;
+    padding: 0 32px;
+}
+
+.tab-btn {
+    padding: 14px 22px;
+    font-family: 'Nunito', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--brown-light);
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+    margin-bottom: -1.5px;
+    letter-spacing: 0.3px;
+}
+
+.tab-btn:hover { color: var(--brown); }
+
+.tab-btn.active {
+    color: var(--red);
+    border-bottom-color: var(--red);
+}
+
+.tab-content { display: none; padding: 28px 32px 32px; }
+.tab-content.active { display: block; }
+
+/* ─── FORMULARIO ──────────────────────────────────────── */
+.section-title {
+    font-family: 'Lora', serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--brown-mid);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border-light);
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 14px;
+    background: var(--cream);
+    border: 1.5px solid var(--border-light);
+    border-radius: 14px;
+    padding: 22px;
+    margin-bottom: 22px;
+}
+
+.full-width { grid-column: 1 / -1; }
+
+/* ─── ADJUNTO / CLIP ──────────────────────────────────── */
+.adjunto-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Botón clip — se comporta como label para el input file */
+.btn-clip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: #fff;
+    border: 1.5px dashed var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    font-family: 'Nunito', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--brown-light);
+    transition: border-color 0.2s, color 0.2s, background 0.2s;
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    user-select: none;
+}
+
+.btn-clip:hover {
+    border-color: var(--gold);
+    color: var(--brown);
+    background: var(--cream);
+}
+
+.btn-clip svg {
+    flex-shrink: 0;
+    color: var(--gold);
+}
+
+/* Botón quitar adjunto */
+.btn-quitar-adjunto {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 1.5px solid #f09595;
+    background: #fff0f0;
+    color: #b83030;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+    line-height: 1;
+    padding: 0;
+}
+
+.btn-quitar-adjunto:hover { background: #ffd5d5; }
+
+/* Preview del adjunto bajo el campo */
+.preview-adjunto {
+    margin-top: 10px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1.5px solid var(--border-light);
+    background: #fff;
+}
+
+.preview-img {
+    display: block;
+    max-height: 180px;
+    max-width: 100%;
+    object-fit: contain;
+    margin: 0 auto;
+    padding: 8px;
+}
+
+.preview-pdf {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--brown-mid);
+}
+
+/* Links de adjunto en historial/pagos */
+.adjunto-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: background 0.15s;
+    letter-spacing: 0.2px;
+}
+
+.adjunto-pdf {
+    background: #fff0ee;
+    color: var(--red);
+    border: 1px solid #f8c4bb;
+}
+
+.adjunto-pdf:hover { background: #ffd8d0; }
+
+.adjunto-img {
+    background: #f0f5ff;
+    color: #2a5aa0;
+    border: 1px solid #bcd0f5;
+}
+
+.adjunto-img:hover { background: #d8e8ff; }
+
+/* ─── BADGES: PROYECTO ────────────────────────────────── */
+.proyecto-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    vertical-align: middle;
+    margin-left: 5px;
+}
+
+.proyecto-nuevo {
+    background: #e8f4ff;
+    color: #1a5a9a;
+    border: 1px solid #b0d4f5;
+}
+
+.proyecto-repuesto {
+    background: #fdf0e0;
+    color: var(--brown-mid);
+    border: 1px solid var(--border);
+}
+
+/* ─── LEYENDA ESTADOS ─────────────────────────────────── */
+.leyenda-estados {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+
+.leyenda-item {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.3px;
+}
+
+/* ─── HISTORIAL ───────────────────────────────────────── */
+.historial-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.historial-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--cream);
+    border: 1.5px solid var(--border-light);
+    border-radius: 12px;
+    padding: 14px 18px;
+    gap: 12px;
+    transition: border-color 0.2s;
+}
+
+.historial-item:hover { border-color: var(--gold); }
+
+.estado-barra {
+    width: 4px;
+    align-self: stretch;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.historial-info { flex: 1; min-width: 0; }
+
+.historial-nombre {
+    font-family: 'Lora', serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--brown);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.historial-meta {
+    font-size: 12px;
+    color: var(--brown-light);
+    margin-top: 3px;
+}
+
+.historial-total {
+    font-family: 'Lora', serif;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--brown-mid);
+    white-space: nowrap;
+}
+
+.historial-fecha {
+    font-size: 11px;
+    color: var(--brown-light);
+    text-align: right;
+    white-space: nowrap;
+}
+
+.historial-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--brown-light);
+    font-size: 14px;
+    font-style: italic;
+}
+
+/* ─── ESTADO PILL ─────────────────────────────────────── */
+.estado-pill {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-top: 3px;
+}
+
+/* ─── BOTÓN ELIMINAR ──────────────────────────────────── */
+.btn-eliminar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1.5px solid #f09595;
+    background: #fff0f0;
+    color: #b83030;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.2s;
+    line-height: 1;
+    padding: 0;
+}
+
+.btn-eliminar:hover { background: #ffd5d5; }
+
+/* ─── LISTADO PAGOS ───────────────────────────────────── */
+.pagos-filtros {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+}
+
+.filtro-btn {
+    padding: 7px 16px;
+    font-family: 'Nunito', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    border-radius: 20px;
+    border: 1.5px solid var(--border);
+    background: #fff;
+    color: var(--brown-light);
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.3px;
+}
+
+.filtro-btn:hover { border-color: var(--gold); color: var(--brown); }
+.filtro-btn.active { background: var(--brown); color: var(--cream); border-color: var(--brown); }
+
+.pagos-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.pago-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--cream);
+    border: 1.5px solid var(--border-light);
+    border-radius: 12px;
+    padding: 14px 18px;
+    gap: 12px;
+    transition: border-color 0.2s;
+}
+
+.pago-item:hover { border-color: var(--gold); }
+
+.pago-info { flex: 1; min-width: 0; }
+
+.pago-nombre {
+    font-family: 'Lora', serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--brown);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pago-meta {
+    font-size: 12px;
+    color: var(--brown-light);
+    margin-top: 3px;
+}
+
+.pago-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-shrink: 0;
+}
+
+.pago-total {
+    font-family: 'Lora', serif;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--brown-mid);
+}
+
+.pago-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1.5px solid var(--border);
+    background: #fff;
+    transition: all 0.2s;
+    font-family: 'Nunito', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--brown-light);
+    white-space: nowrap;
+}
+
+.pago-toggle:hover { border-color: var(--green); color: var(--green); }
+
+.pagos-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--brown-light);
+    font-size: 14px;
+    font-style: italic;
+}
+
+.pagos-resumen {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.resumen-card {
+    flex: 1;
+    min-width: 120px;
+    background: var(--cream);
+    border: 1.5px solid var(--border-light);
+    border-radius: 12px;
+    padding: 14px 18px;
+    text-align: center;
+}
+
+.resumen-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--brown-light);
+    margin-bottom: 6px;
+}
+
+.resumen-valor {
+    font-family: 'Lora', serif;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--brown);
+}
+
+/* ─── ADMIN ───────────────────────────────────────────── */
+.admin-actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+.chart-wrapper {
+    height: 280px;
+    margin-bottom: 28px;
+    background: var(--cream);
+    border: 1.5px solid var(--border-light);
+    border-radius: 14px;
+    padding: 16px;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+}
+
+.stat-card {
+    background: var(--cream);
+    border: 1.5px solid var(--border-light);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+    transition: border-color 0.2s;
+}
+
+.stat-card:hover { border-color: var(--gold); }
+
+.stat-month {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: capitalize;
+    color: var(--brown-light);
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.stat-value {
+    font-family: 'Lora', serif;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--brown);
+}
+
+.divider {
+    height: 1px;
+    background: var(--border-light);
+    margin: 24px 0;
+}
 
 /* ═══════════════════════════════════════════════════════
-   MODAL DE DETALLE / EDICIÓN (CRUD)
+   MODAL DETALLE / EDICIÓN
    ═══════════════════════════════════════════════════════ */
 
-// Abre el modal en modo "ver"
-window.abrirDetalle = function(firestoreId) {
-    const r = inventario.find(x => x.firestoreId === firestoreId);
-    if (!r) return;
-    renderModalVer(r);
-    document.getElementById('modalOverlay').classList.add('modal-open');
-    document.body.style.overflow = 'hidden';
-};
-
-// Cierra el modal
-window.cerrarModal = function() {
-    document.getElementById('modalOverlay').classList.remove('modal-open');
-    document.body.style.overflow = '';
-};
-
-// Cierra si se hace clic en el backdrop
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('modalOverlay')?.addEventListener('click', e => {
-        if (e.target.id === 'modalOverlay') window.cerrarModal();
-    });
-    document.addEventListener('keydown', e => {
-        if (e.key === 'Escape') window.cerrarModal();
-    });
-});
-
-/* ── MODO VER ─────────────────────────────────────────── */
-function renderModalVer(r) {
-    const ep   = r.EstadoPago || 'pendiente';
-    const info = estadoPagoInfo(ep);
-
-    const proyectoBadge = r.Proyecto
-        ? `<span class="proyecto-badge proyecto-${r.Proyecto.toLowerCase()}" style="font-size:12px;padding:3px 10px;">${r.Proyecto}</span>`
-        : '';
-
-    // Adjunto
-    let adjuntoBlock = '';
-    if (r.AdjuntoURL) {
-        const esPDF = r.AdjuntoTipo === 'application/pdf' || (r.AdjuntoNombre||'').toLowerCase().endsWith('.pdf');
-        if (esPDF) {
-            adjuntoBlock = `
-            <div class="modal-adjunto-wrap">
-                <a href="${r.AdjuntoURL}" target="_blank" class="modal-adjunto-btn adjunto-pdf">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
-                         fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                        <polyline points="14 2 14 8 20 8"/>
-                    </svg>
-                    Ver PDF · ${r.AdjuntoNombre || 'Adjunto'}
-                </a>
-            </div>`;
-        } else {
-            adjuntoBlock = `
-            <div class="modal-adjunto-wrap">
-                <a href="${r.AdjuntoURL}" target="_blank">
-                    <img src="${r.AdjuntoURL}" alt="Adjunto" class="modal-adjunto-img">
-                </a>
-                <p class="modal-adjunto-label">${r.AdjuntoNombre || 'Ver imagen'}</p>
-            </div>`;
-        }
-    }
-
-    // Botones de acción según rol
-    let acciones = '';
-    if (puedeEliminar()) {
-        acciones += `<button class="btn btn-danger modal-btn-sm" onclick="eliminarDesdeModal('${r.firestoreId}')">✕ Eliminar</button>`;
-    }
-    // Solo admin y romero pueden editar
-    if (['admin','romero'].includes(userActual)) {
-        acciones += `<button class="btn btn-edit modal-btn-sm" onclick="renderModalEditar('${r.firestoreId}')">✎ Editar</button>`;
-    }
-
-    document.getElementById('modalContent').innerHTML = `
-        <div class="modal-header">
-            <div class="modal-header-left">
-                <span class="estado-pill" style="background:${info.bg};color:${info.color};font-size:11px;">${info.label}</span>
-                ${proyectoBadge}
-            </div>
-            <button class="modal-close" onclick="cerrarModal()">✕</button>
-        </div>
-
-        <h2 class="modal-titulo">${r.Pieza}</h2>
-        <div class="modal-total">$${parseFloat(r.Total).toLocaleString('es-AR', {minimumFractionDigits:2})}</div>
-
-        <div class="modal-grid">
-            <div class="modal-field">
-                <span class="modal-label">Código</span>
-                <span class="modal-value">${r.Codigo || '—'}</span>
-            </div>
-            <div class="modal-field">
-                <span class="modal-label">N° Factura</span>
-                <span class="modal-value">${r.Factura || '—'}</span>
-            </div>
-            <div class="modal-field">
-                <span class="modal-label">Estado pieza</span>
-                <span class="modal-value">${r.Estado || '—'}</span>
-            </div>
-            <div class="modal-field">
-                <span class="modal-label">Proyecto</span>
-                <span class="modal-value">${r.Proyecto || '—'}</span>
-            </div>
-            <div class="modal-field">
-                <span class="modal-label">Cantidad</span>
-                <span class="modal-value">${r.Cantidad}</span>
-            </div>
-            <div class="modal-field">
-                <span class="modal-label">Precio unitario</span>
-                <span class="modal-value">$${parseFloat(r.Precio_Unit).toLocaleString('es-AR', {minimumFractionDigits:2})}</span>
-            </div>
-            <div class="modal-field">
-                <span class="modal-label">Fecha</span>
-                <span class="modal-value">${r.Fecha} ${r.Hora}</span>
-            </div>
-            <div class="modal-field">
-                <span class="modal-label">Registrado por</span>
-                <span class="modal-value">${r.Usuario}</span>
-            </div>
-        </div>
-
-        ${r.Descripcion ? `
-        <div class="modal-desc-wrap">
-            <span class="modal-label">Descripción</span>
-            <p class="modal-desc">${r.Descripcion}</p>
-        </div>` : ''}
-
-        ${adjuntoBlock}
-
-        ${acciones ? `<div class="modal-acciones">${acciones}</div>` : ''}
-    `;
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(30, 15, 5, 0.55);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 16px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease;
 }
 
-/* ── MODO EDITAR ──────────────────────────────────────── */
-window.renderModalEditar = function(firestoreId) {
-    const r = inventario.find(x => x.firestoreId === firestoreId);
-    if (!r) return;
-
-    document.getElementById('modalContent').innerHTML = `
-        <div class="modal-header">
-            <span style="font-family:'Lora',serif;font-size:15px;color:var(--brown-mid);font-weight:600;">Editar registro</span>
-            <button class="modal-close" onclick="cerrarModal()">✕</button>
-        </div>
-
-        <div class="modal-edit-grid">
-            <div class="field">
-                <label>Nombre Pieza</label>
-                <input type="text" id="edit-pieza" value="${r.Pieza || ''}">
-            </div>
-            <div class="field">
-                <label>Código</label>
-                <input type="text" id="edit-codigo" value="${r.Codigo || ''}">
-            </div>
-            <div class="field">
-                <label>N° Factura</label>
-                <input type="text" id="edit-factura" value="${r.Factura || ''}">
-            </div>
-            <div class="field">
-                <label>Proyecto</label>
-                <select id="edit-proyecto">
-                    <option value="Nuevo"    ${(r.Proyecto||'') === 'Nuevo'    ? 'selected' : ''}>Nuevo</option>
-                    <option value="Repuesto" ${(r.Proyecto||'') === 'Repuesto' ? 'selected' : ''}>Repuesto</option>
-                </select>
-            </div>
-            <div class="field">
-                <label>Estado pieza</label>
-                <select id="edit-estado">
-                    <option value="Nueva"  ${(r.Estado||'') === 'Nueva'  ? 'selected' : ''}>Nueva</option>
-                    <option value="Usada"  ${(r.Estado||'') === 'Usada'  ? 'selected' : ''}>Usada</option>
-                </select>
-            </div>
-            <div class="field">
-                <label>Cantidad</label>
-                <input type="number" id="edit-cantidad" value="${r.Cantidad || 1}" min="1">
-            </div>
-            <div class="field">
-                <label>Precio Unitario ($)</label>
-                <input type="number" id="edit-preciounit" value="${parseFloat(r.Precio_Unit) || 0}" min="0" class="highlight-input">
-            </div>
-            <div class="field" style="grid-column:1/-1;">
-                <label>Descripción</label>
-                <textarea id="edit-descripcion">${r.Descripcion || ''}</textarea>
-            </div>
-        </div>
-
-        <div class="modal-acciones">
-            <button class="btn btn-logout modal-btn-sm" onclick="abrirDetalle('${firestoreId}')">← Cancelar</button>
-            <button class="btn btn-register modal-btn-sm" onclick="guardarEdicion('${firestoreId}')">✔ Guardar cambios</button>
-        </div>
-    `;
-};
-
-/* ── GUARDAR EDICIÓN ──────────────────────────────────── */
-window.guardarEdicion = async function(firestoreId) {
-    const cant  = parseInt(document.getElementById('edit-cantidad').value) || 1;
-    const punit = parseFloat(document.getElementById('edit-preciounit').value) || 0;
-
-    const cambios = {
-        Pieza:       document.getElementById('edit-pieza').value.trim(),
-        Codigo:      document.getElementById('edit-codigo').value.trim(),
-        Factura:     document.getElementById('edit-factura').value.trim(),
-        Proyecto:    document.getElementById('edit-proyecto').value,
-        Estado:      document.getElementById('edit-estado').value,
-        Cantidad:    cant,
-        Precio_Unit: punit.toFixed(2),
-        Total:       (punit * cant).toFixed(2),
-        Descripcion: document.getElementById('edit-descripcion').value.trim(),
-    };
-
-    if (!cambios.Pieza) { alert('El nombre de la pieza es obligatorio.'); return; }
-
-    try {
-        await updateDoc(doc(db, COL, firestoreId), cambios);
-        // Refrescar y volver a modo ver
-        const actualizado = { ...inventario.find(x => x.firestoreId === firestoreId), ...cambios };
-        renderModalVer(actualizado);
-    } catch (e) {
-        alert('Error al guardar: ' + e.message);
-    }
-};
-
-/* ── ELIMINAR DESDE MODAL ─────────────────────────────── */
-window.eliminarDesdeModal = async function(firestoreId) {
-    if (!puedeEliminar()) return;
-    if (!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
-    try {
-        await deleteDoc(doc(db, COL, firestoreId));
-        window.cerrarModal();
-    } catch (e) {
-        alert('Error al eliminar: ' + e.message);
-    }
-};
-
-/* ═══════════════════════════════════════════════════════
-   ADJUNTO: UI (formulario nuevo registro)
-   ═══════════════════════════════════════════════════════ */
-window.mostrarNombreArchivo = function() {
-    const input   = document.getElementById('archivoAdjunto');
-    const label   = document.getElementById('adjuntoLabel');
-    const btnQ    = document.getElementById('btnQuitarAdjunto');
-    const preview = document.getElementById('previewAdjunto');
-
-    if (!input.files || !input.files[0]) return;
-    const file = input.files[0];
-    label.textContent = file.name;
-    btnQ.classList.remove('hidden');
-    preview.classList.remove('hidden');
-    preview.innerHTML = '';
-
-    if (file.type.startsWith('image/')) {
-        const url = URL.createObjectURL(file);
-        preview.innerHTML = `<img src="${url}" alt="preview" class="preview-img">`;
-    } else if (file.type === 'application/pdf') {
-        preview.innerHTML = `
-            <div class="preview-pdf">
-                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24"
-                     fill="none" stroke="#c8420a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                    <polyline points="14 2 14 8 20 8"/>
-                </svg>
-                <span>${file.name}</span>
-            </div>`;
-    }
-};
-
-window.quitarAdjunto = function() {
-    const input   = document.getElementById('archivoAdjunto');
-    const label   = document.getElementById('adjuntoLabel');
-    const btnQ    = document.getElementById('btnQuitarAdjunto');
-    const preview = document.getElementById('previewAdjunto');
-    input.value   = '';
-    label.textContent = 'Adjuntar archivo';
-    btnQ.classList.add('hidden');
-    preview.classList.add('hidden');
-    preview.innerHTML = '';
-};
-
-/* ═══════════════════════════════════════════════════════
-   PRECIO
-   ═══════════════════════════════════════════════════════ */
-function cambiarEtiquetaPrecio() {
-    const modo = document.getElementById('modoPrecio').value;
-    document.getElementById('labelMonto').innerText =
-        modo === 'unitario' ? 'Precio por Unidad ($)' : 'Precio Total de Factura ($)';
-}
-window.cambiarEtiquetaPrecio = cambiarEtiquetaPrecio;
-
-/* ═══════════════════════════════════════════════════════
-   HELPERS
-   ═══════════════════════════════════════════════════════ */
-function estadoPagoInfo(ep) {
-    if (ep === 'habilitado') return { label: 'Habilitado', color: '#854f0b', bg: '#faeeda' };
-    if (ep === 'pagado')     return { label: 'Pagado',     color: '#27500a', bg: '#eaf3de' };
-    return                          { label: 'Pendiente',  color: '#791f1f', bg: '#fcebeb' };
+.modal-overlay.modal-open {
+    opacity: 1;
+    pointer-events: all;
 }
 
-function puedeEliminar()     { return ['guillermo','romero','admin'].includes(userActual); }
-function puedeHabilitar()    { return ['romero','admin'].includes(userActual); }
-function puedeMarcarPagado() { return ['romero','admin','oficina'].includes(userActual); }
-
-/* ═══════════════════════════════════════════════════════
-   LOGIN / LOGOUT
-   ═══════════════════════════════════════════════════════ */
-const CLAVES = {
-    guillermo: 'Guillermo123456',
-    romero:    'Romero.2026',
-    admin:     'Admin.2026',
-    oficina:   'Oficina.2026'
-};
-
-function login() {
-    const user = document.getElementById('userSelect').value;
-    const pass = document.getElementById('passInput').value;
-    if (pass !== CLAVES[user]) { alert('Contraseña incorrecta.'); return; }
-
-    userActual = user;
-    document.getElementById('loginSection').classList.add('hidden');
-    document.getElementById('mainSection').classList.remove('hidden');
-
-    const nombres   = { guillermo: 'Guillermo', romero: 'Romero', admin: 'Administrador', oficina: 'Oficina' };
-    const colores   = { guillermo: '#c8860a', romero: '#533ab7', admin: '#7a4a20', oficina: '#1a6080' };
-    const etiquetas = { guillermo: 'Carga', romero: 'Supervisor', admin: 'Acceso Total', oficina: 'Pagos' };
-
-    document.getElementById('welcomeText').innerText = 'Hola, ' + nombres[user];
-    const badge = document.getElementById('badge');
-    badge.innerText = etiquetas[user];
-    badge.style.backgroundColor = colores[user];
-
-    document.querySelectorAll('.tab-btn').forEach(t => t.classList.add('hidden'));
-    document.querySelectorAll('.tab-content').forEach(t => { t.classList.remove('active'); t.classList.add('hidden'); });
-
-    if (user === 'guillermo') {
-        mostrarTabs(['tab-carga','tab-historial']);
-        activarTab('tab-carga');
-    } else if (user === 'romero') {
-        mostrarTabs(['tab-carga','tab-historial','tab-pagos']);
-        activarTab('tab-carga');
-    } else if (user === 'admin') {
-        mostrarTabs(['tab-carga','tab-historial','tab-pagos','tab-admin']);
-        activarTab('tab-carga');
-    } else if (user === 'oficina') {
-        mostrarTabs(['tab-pagos']);
-        activarTab('tab-pagos');
-    }
-
-    suscribirFirestore();
-}
-window.login = login;
-
-function logout() {
-    if (unsubscribe) unsubscribe();
-    location.reload();
-}
-window.logout = logout;
-
-function mostrarTabs(ids) {
-    ids.forEach(id => {
-        const btn = document.querySelector(`[data-tab="${id}"]`);
-        if (btn) btn.classList.remove('hidden');
-    });
+.modal-overlay.modal-open .modal-card {
+    transform: translateY(0) scale(1);
+    opacity: 1;
 }
 
-function activarTab(id) {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(c => { c.classList.remove('active'); c.classList.add('hidden'); });
-    const btn     = document.querySelector(`[data-tab="${id}"]`);
-    const content = document.getElementById(id);
-    if (btn) btn.classList.add('active');
-    if (content) { content.classList.remove('hidden'); content.classList.add('active'); }
-
-    if (id === 'tab-historial') renderHistorial();
-    if (id === 'tab-pagos')    renderPagos('todos');
-    if (id === 'tab-admin')    { setTimeout(initChart, 100); actualizarComparador(); }
-}
-window.activarTab = activarTab;
-
-/* ═══════════════════════════════════════════════════════
-   FIRESTORE: SUSCRIPCIÓN EN TIEMPO REAL
-   ═══════════════════════════════════════════════════════ */
-function suscribirFirestore() {
-    const q = query(collection(db, COL), orderBy('timestamp', 'asc'));
-    unsubscribe = onSnapshot(q, (snapshot) => {
-        inventario = snapshot.docs.map(d => ({ firestoreId: d.id, ...d.data() }));
-        refrescarVistasActivas();
-    });
+.modal-card {
+    width: 100%;
+    max-width: 560px;
+    max-height: 90vh;
+    overflow-y: auto;
+    background: #fff;
+    border-radius: 20px;
+    border: 1.5px solid var(--border);
+    box-shadow: 0 24px 80px rgba(60,30,5,0.22);
+    padding: 28px 32px 32px;
+    transform: translateY(18px) scale(0.98);
+    opacity: 0;
+    transition: transform 0.25s cubic-bezier(0.22,1,0.36,1), opacity 0.22s ease;
 }
 
-function refrescarVistasActivas() {
-    const tabActiva = document.querySelector('.tab-content.active');
-    if (!tabActiva) return;
-    const id = tabActiva.id;
-    if (id === 'tab-historial') renderHistorial();
-    if (id === 'tab-pagos')    renderPagos(filtroActual);
-    if (id === 'tab-admin')    { setTimeout(initChart, 100); actualizarComparador(); }
+/* scrollbar dentro del modal */
+.modal-card::-webkit-scrollbar { width: 5px; }
+.modal-card::-webkit-scrollbar-track { background: transparent; }
+.modal-card::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+
+/* ── encabezado modal ─────────────────────────────────── */
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.modal-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.modal-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border);
+    background: var(--cream);
+    color: var(--brown-light);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.2s, color 0.2s;
+    line-height: 1;
+    padding: 0;
+}
+
+.modal-close:hover { background: #ffd5d5; color: #b83030; border-color: #f09595; }
+
+/* ── título y total ───────────────────────────────────── */
+.modal-titulo {
+    font-family: 'Lora', serif;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--brown);
+    margin-bottom: 4px;
+    line-height: 1.2;
+}
+
+.modal-total {
+    font-family: 'Lora', serif;
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--gold);
+    margin-bottom: 22px;
+    letter-spacing: -0.5px;
+}
+
+/* ── grilla de campos de detalle ─────────────────────── */
+.modal-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border: 1.5px solid var(--border-light);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 18px;
+}
+
+.modal-field {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-light);
+    border-right: 1px solid var(--border-light);
+}
+
+.modal-field:nth-child(even) { border-right: none; }
+.modal-field:nth-last-child(-n+2) { border-bottom: none; }
+
+.modal-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--brown-light);
+}
+
+.modal-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--brown);
+}
+
+/* ── descripción ──────────────────────────────────────── */
+.modal-desc-wrap {
+    background: var(--cream);
+    border: 1.5px solid var(--border-light);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.modal-desc {
+    font-size: 14px;
+    color: var(--brown);
+    line-height: 1.55;
+    font-weight: 400;
+}
+
+/* ── adjunto en modal ─────────────────────────────────── */
+.modal-adjunto-wrap {
+    margin-bottom: 20px;
+    border: 1.5px solid var(--border-light);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--cream);
+}
+
+.modal-adjunto-img {
+    display: block;
+    width: 100%;
+    max-height: 260px;
+    object-fit: contain;
+    padding: 12px;
+}
+
+.modal-adjunto-label {
+    font-size: 11px;
+    color: var(--brown-light);
+    padding: 4px 14px 10px;
+    font-weight: 600;
+}
+
+.modal-adjunto-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 20px;
+    text-decoration: none;
+    font-family: 'Nunito', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    transition: background 0.2s;
+}
+
+.modal-adjunto-btn.adjunto-pdf {
+    color: var(--red);
+    background: #fff8f7;
+}
+
+.modal-adjunto-btn.adjunto-pdf:hover { background: #ffecea; }
+
+/* ── botones de acción del modal ──────────────────────── */
+.modal-acciones {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+
+.modal-btn-sm {
+    padding: 9px 18px !important;
+    font-size: 13px !important;
+    width: auto !important;
+}
+
+.btn-edit {
+    background: var(--brown-mid);
+    color: var(--cream);
+    padding: 9px 18px;
+    font-size: 13px;
+}
+
+.btn-edit:hover { background: var(--brown); }
+
+/* ── grilla del formulario de edición dentro del modal ── */
+.modal-edit-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+.modal-edit-grid .field { margin-bottom: 0; }
+
+@media (max-width: 500px) {
+    .modal-edit-grid { grid-template-columns: 1fr; }
+    .modal-grid { grid-template-columns: 1fr; }
+    .modal-field:nth-child(even) { border-right: 1px solid var(--border-light); }
+    .modal-field { border-right: none !important; }
+    .modal-card { padding: 22px 18px 26px; }
 }
 
 /* ═══════════════════════════════════════════════════════
-   REGISTRAR PIEZA
+   FILAS CLICKEABLES
    ═══════════════════════════════════════════════════════ */
-async function agregarDato() {
-    const nombre = document.getElementById('nombrePieza').value.trim();
-    const cant   = parseInt(document.getElementById('cantidad').value) || 0;
-    const monto  = parseFloat(document.getElementById('valor').value) || 0;
-    const modo   = document.getElementById('modoPrecio').value;
-
-    if (!nombre || cant <= 0 || monto <= 0) {
-        alert('Completá los datos de Pieza, Cantidad y Monto.');
-        return;
-    }
-
-    let precioUnitario, precioTotal;
-    if (modo === 'unitario') { precioUnitario = monto; precioTotal = monto * cant; }
-    else                     { precioTotal = monto; precioUnitario = monto / cant; }
-
-    const ahora = new Date();
-
-    let adjuntoURL = '', adjuntoNombre = '', adjuntoTipo = '';
-    const fileInput = document.getElementById('archivoAdjunto');
-    const file      = fileInput.files && fileInput.files[0];
-
-    if (file) {
-        try {
-            const ext           = file.name.split('.').pop();
-            const nombreArchivo = `adjuntos/${ahora.getTime()}_${nombre.replace(/\s+/g,'_')}.${ext}`;
-            const storageRef    = ref(storage, nombreArchivo);
-            await uploadBytes(storageRef, file);
-            adjuntoURL    = await getDownloadURL(storageRef);
-            adjuntoNombre = file.name;
-            adjuntoTipo   = file.type;
-        } catch (e) {
-            console.warn('No se pudo subir el adjunto:', e.message);
-        }
-    }
-
-    const registro = {
-        timestamp:     ahora.getTime(),
-        Mes:           ahora.toLocaleString('es-ES', { month: 'long' }),
-        Fecha:         ahora.toLocaleDateString('es-AR'),
-        Hora:          ahora.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        Usuario:       userActual,
-        Pieza:         nombre,
-        Codigo:        document.getElementById('codigoPieza').value.trim(),
-        Factura:       document.getElementById('numFactura').value.trim(),
-        Proyecto:      document.getElementById('proyectoPieza').value,
-        Estado:        document.getElementById('tipoPieza').value,
-        Cantidad:      cant,
-        Precio_Unit:   precioUnitario.toFixed(2),
-        Total:         precioTotal.toFixed(2),
-        Modo_Ingreso:  modo,
-        Descripcion:   document.getElementById('descripcion').value.trim(),
-        EstadoPago:    'pendiente',
-        AdjuntoURL:    adjuntoURL,
-        AdjuntoNombre: adjuntoNombre,
-        AdjuntoTipo:   adjuntoTipo
-    };
-
-    try {
-        await addDoc(collection(db, COL), registro);
-        alert('¡Registro exitoso!');
-        ['nombrePieza','codigoPieza','numFactura','valor','descripcion'].forEach(id => {
-            document.getElementById(id).value = '';
-        });
-        document.getElementById('cantidad').value = '1';
-        window.quitarAdjunto();
-    } catch (e) {
-        alert('Error al guardar: ' + e.message);
-    }
-}
-window.agregarDato = agregarDato;
-
-/* ═══════════════════════════════════════════════════════
-   ELIMINAR (desde lista — mantiene compatibilidad)
-   ═══════════════════════════════════════════════════════ */
-async function eliminarRegistro(firestoreId) {
-    if (!puedeEliminar()) return;
-    if (!confirm('¿Eliminar este registro?')) return;
-    try { await deleteDoc(doc(db, COL, firestoreId)); }
-    catch (e) { alert('Error al eliminar: ' + e.message); }
-}
-window.eliminarRegistro = eliminarRegistro;
-
-async function eliminarPago(firestoreId) {
-    if (!puedeEliminar()) return;
-    if (!confirm('¿Eliminar este pedido?')) return;
-    try { await deleteDoc(doc(db, COL, firestoreId)); }
-    catch (e) { alert('Error al eliminar: ' + e.message); }
-}
-window.eliminarPago = eliminarPago;
-
-/* ═══════════════════════════════════════════════════════
-   RENDER: ícono adjunto pequeño (listas)
-   ═══════════════════════════════════════════════════════ */
-function adjuntoHTML(r) {
-    if (!r.AdjuntoURL) return '';
-    const esPDF = r.AdjuntoTipo === 'application/pdf' || (r.AdjuntoNombre||'').toLowerCase().endsWith('.pdf');
-    if (esPDF) {
-        return `<a href="${r.AdjuntoURL}" target="_blank" class="adjunto-link adjunto-pdf"
-                   onclick="event.stopPropagation()" title="${r.AdjuntoNombre || 'Ver PDF'}">
-            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
-                 fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
-            </svg> PDF</a>`;
-    }
-    return `<a href="${r.AdjuntoURL}" target="_blank" class="adjunto-link adjunto-img"
-               onclick="event.stopPropagation()" title="${r.AdjuntoNombre || 'Ver imagen'}">
-        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
-             fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-            <circle cx="8.5" cy="8.5" r="1.5"/>
-            <polyline points="21 15 16 10 5 21"/>
-        </svg> Foto</a>`;
+.clickable-row {
+    cursor: pointer;
+    position: relative;
 }
 
-/* ═══════════════════════════════════════════════════════
-   HISTORIAL
-   ═══════════════════════════════════════════════════════ */
-function renderHistorial() {
-    const lista = document.getElementById('historialList');
-    if (!lista) return;
-
-    const items = (userActual === 'admin' || userActual === 'romero')
-        ? [...inventario].reverse()
-        : [...inventario].filter(r => r.Usuario === 'guillermo').reverse();
-
-    if (items.length === 0) {
-        lista.innerHTML = '<p class="historial-empty">No hay registros todavía.</p>';
-        return;
-    }
-
-    lista.innerHTML = items.slice(0, 50).map(r => {
-        const ep   = r.EstadoPago || 'pendiente';
-        const info = estadoPagoInfo(ep);
-        const btnEliminar = puedeEliminar()
-            ? `<button class="btn-eliminar" onclick="event.stopPropagation();eliminarRegistro('${r.firestoreId}')" title="Eliminar">✕</button>`
-            : '';
-        const proyectoBadge = r.Proyecto
-            ? `<span class="proyecto-badge proyecto-${r.Proyecto.toLowerCase()}">${r.Proyecto}</span>`
-            : '';
-        return `
-        <div class="historial-item clickable-row" onclick="abrirDetalle('${r.firestoreId}')">
-            <div class="estado-barra" style="background:${info.color}"></div>
-            <div class="historial-info">
-                <div class="historial-nombre">${r.Pieza} ${proyectoBadge}</div>
-                <div class="historial-meta">
-                    ${r.Estado} · Cant: ${r.Cantidad}
-                    ${r.Factura ? '· Fac: ' + r.Factura : ''}
-                    ${r.Codigo  ? '· Cód: ' + r.Codigo  : ''}
-                </div>
-            </div>
-            <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
-                <div style="text-align:right;">
-                    <div class="historial-total">$${parseFloat(r.Total).toLocaleString('es-AR')}</div>
-                    <div class="historial-fecha">${r.Fecha} ${r.Hora}</div>
-                    <span class="estado-pill" style="background:${info.bg};color:${info.color};">${info.label}</span>
-                    ${adjuntoHTML(r)}
-                </div>
-                ${btnEliminar}
-            </div>
-        </div>`;
-    }).join('');
+.clickable-row::after {
+    content: '›';
+    position: absolute;
+    right: -2px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 18px;
+    color: var(--border);
+    transition: color 0.2s, right 0.15s;
+    pointer-events: none;
 }
 
-/* ═══════════════════════════════════════════════════════
-   PAGOS
-   ═══════════════════════════════════════════════════════ */
-let filtroActual = 'todos';
-
-function renderPagos(filtro) {
-    filtroActual = filtro;
-    document.querySelectorAll('.filtro-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.filtro === filtro);
-    });
-
-    const lista   = document.getElementById('pagosList');
-    const resumen = document.getElementById('pagosResumen');
-    if (!lista) return;
-
-    const sumaPor = (estado) =>
-        inventario.filter(r => (r.EstadoPago||'pendiente') === estado)
-                  .reduce((a, r) => a + parseFloat(r.Total), 0);
-
-    if (resumen) {
-        resumen.innerHTML = `
-            <div class="resumen-card">
-                <div class="resumen-label">Total registros</div>
-                <div class="resumen-valor">${inventario.length}</div>
-            </div>
-            <div class="resumen-card" style="background:#fcebeb;border-color:#f09595;">
-                <div class="resumen-label" style="color:#791f1f;">Pendiente</div>
-                <div class="resumen-valor" style="color:#791f1f;">$${sumaPor('pendiente').toLocaleString('es-AR',{maximumFractionDigits:0})}</div>
-            </div>
-            <div class="resumen-card" style="background:#faeeda;border-color:#ef9f27;">
-                <div class="resumen-label" style="color:#854f0b;">Habilitado</div>
-                <div class="resumen-valor" style="color:#854f0b;">$${sumaPor('habilitado').toLocaleString('es-AR',{maximumFractionDigits:0})}</div>
-            </div>
-            <div class="resumen-card" style="background:#eaf3de;border-color:#97c459;">
-                <div class="resumen-label" style="color:#27500a;">Pagado</div>
-                <div class="resumen-valor" style="color:#27500a;">$${sumaPor('pagado').toLocaleString('es-AR',{maximumFractionDigits:0})}</div>
-            </div>`;
-    }
-
-    let items = [...inventario].reverse();
-    if (filtro === 'pendientes')  items = items.filter(r => (r.EstadoPago||'pendiente') === 'pendiente');
-    if (filtro === 'habilitados') items = items.filter(r => (r.EstadoPago||'pendiente') === 'habilitado');
-    if (filtro === 'pagados')     items = items.filter(r => (r.EstadoPago||'pendiente') === 'pagado');
-
-    if (items.length === 0) {
-        lista.innerHTML = '<p class="pagos-empty">No hay registros en esta categoría.</p>';
-        return;
-    }
-
-    lista.innerHTML = items.map(r => {
-        const ep   = r.EstadoPago || 'pendiente';
-        const info = estadoPagoInfo(ep);
-
-        let acciones = '';
-        if (ep === 'pendiente'  && puedeHabilitar())
-            acciones += `<button class="pago-toggle" onclick="event.stopPropagation();cambiarEstadoPago('${r.firestoreId}','habilitado')" style="border-color:#ef9f27;color:#854f0b;">Habilitar</button>`;
-        if (ep === 'habilitado' && puedeMarcarPagado())
-            acciones += `<button class="pago-toggle" onclick="event.stopPropagation();cambiarEstadoPago('${r.firestoreId}','pagado')" style="border-color:#639922;color:#27500a;">Marcar pagado</button>`;
-        if (ep === 'pagado'     && puedeHabilitar())
-            acciones += `<button class="pago-toggle" onclick="event.stopPropagation();cambiarEstadoPago('${r.firestoreId}','habilitado')" style="border-color:#ef9f27;color:#854f0b;font-size:11px;">Revertir</button>`;
-
-        const btnEliminar = puedeEliminar()
-            ? `<button class="btn-eliminar" onclick="event.stopPropagation();eliminarPago('${r.firestoreId}')" title="Eliminar">✕</button>`
-            : '';
-
-        const proyectoBadge = r.Proyecto
-            ? `<span class="proyecto-badge proyecto-${r.Proyecto.toLowerCase()}">${r.Proyecto}</span>`
-            : '';
-
-        return `
-        <div class="pago-item clickable-row" style="border-left:4px solid ${info.color};padding-left:14px;"
-             onclick="abrirDetalle('${r.firestoreId}')">
-            <div class="pago-info">
-                <div class="pago-nombre">${r.Pieza} ${proyectoBadge}</div>
-                <div class="pago-meta">
-                    ${r.Fecha} · ${r.Estado} · Cant: ${r.Cantidad}
-                    ${r.Factura ? '· Fac: ' + r.Factura : ''}
-                </div>
-            </div>
-            <div class="pago-right">
-                <div>
-                    <div class="pago-total">$${parseFloat(r.Total).toLocaleString('es-AR')}</div>
-                    <span class="estado-pill" style="background:${info.bg};color:${info.color};">${info.label}</span>
-                    ${adjuntoHTML(r)}
-                </div>
-                ${acciones}
-                ${btnEliminar}
-            </div>
-        </div>`;
-    }).join('');
-}
-window.renderPagos = renderPagos;
-
-async function cambiarEstadoPago(firestoreId, nuevoEstado) {
-    if (nuevoEstado === 'habilitado' && !puedeHabilitar()) return;
-    if (nuevoEstado === 'pagado'     && !puedeMarcarPagado()) return;
-
-    const registro = inventario.find(r => r.firestoreId === firestoreId);
-    if (!registro) return;
-
-    const ep = registro.EstadoPago || 'pendiente';
-    if (nuevoEstado === 'pagado' && ep !== 'habilitado') {
-        alert('Solo se pueden pagar pedidos habilitados.');
-        return;
-    }
-
-    try { await updateDoc(doc(db, COL, firestoreId), { EstadoPago: nuevoEstado }); }
-    catch (e) { alert('Error al actualizar: ' + e.message); }
-}
-window.cambiarEstadoPago = cambiarEstadoPago;
-
-/* ═══════════════════════════════════════════════════════
-   GRÁFICA
-   ═══════════════════════════════════════════════════════ */
-function initChart() {
-    const ctx = document.getElementById('miGrafica');
-    if (!ctx) return;
-    if (miGrafica) miGrafica.destroy();
-
-    miGrafica = new Chart(ctx.getContext('2d'), {
-        type: 'line',
-        data: {
-            labels: inventario.map(d => d.Fecha + ' ' + d.Hora),
-            datasets: [{
-                label: 'Inversión ($)',
-                data: inventario.map(d => parseFloat(d.Total)),
-                borderColor: '#c8860a',
-                backgroundColor: 'rgba(200,134,10,0.10)',
-                pointBackgroundColor: '#c8420a',
-                pointBorderColor: '#fff',
-                pointBorderWidth: 2,
-                pointRadius: 5,
-                fill: true,
-                tension: 0.4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { labels: { color: '#7a4a20', font: { family: 'Nunito', weight: '700', size: 13 } } } },
-            scales: {
-                x: { ticks: { color: '#a07840', font: { family: 'Nunito', size: 11 } }, grid: { color: 'rgba(200,160,90,0.12)' } },
-                y: { ticks: { color: '#a07840', font: { family: 'Nunito', size: 11 } }, grid: { color: 'rgba(200,160,90,0.12)' } }
-            }
-        }
-    });
+.clickable-row:hover::after {
+    color: var(--gold);
+    right: -4px;
 }
 
-/* ═══════════════════════════════════════════════════════
-   COMPARATIVA MENSUAL
-   ═══════════════════════════════════════════════════════ */
-function actualizarComparador() {
-    const grid = document.getElementById('statsGrid');
-    if (!grid) return;
-    grid.innerHTML = '';
-    const totales = inventario.reduce((acc, curr) => {
-        acc[curr.Mes] = (acc[curr.Mes] || 0) + parseFloat(curr.Total);
-        return acc;
-    }, {});
-    for (const [mes, dinero] of Object.entries(totales)) {
-        grid.innerHTML += `
-            <div class="stat-card">
-                <div class="stat-month">${mes}</div>
-                <div class="stat-value">$${dinero.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</div>
-            </div>`;
-    }
+/* ── hint debajo del título ────────────────────────────── */
+.hint-click {
+    font-size: 11px;
+    color: var(--brown-light);
+    font-style: italic;
+    margin-bottom: 12px;
+    letter-spacing: 0.2px;
 }
-
-/* ═══════════════════════════════════════════════════════
-   EXCEL
-   ═══════════════════════════════════════════════════════ */
-function exportarExcel() {
-    if (inventario.length === 0) { alert('No hay registros para exportar.'); return; }
-    const wb    = XLSX.utils.book_new();
-    const meses = [...new Set(inventario.map(r => r.Mes))];
-    meses.forEach(mes => {
-        const datos = inventario.filter(r => r.Mes === mes).map(({ firestoreId, timestamp, ...resto }) => resto);
-        const ws    = XLSX.utils.json_to_sheet(datos);
-        XLSX.utils.book_append_sheet(wb, ws, mes.toUpperCase());
-    });
-    XLSX.writeFile(wb, 'Inventario_RomeroPanificados.xlsx');
-}
-window.exportarExcel = exportarExcel;
-
-/* ═══════════════════════════════════════════════════════
-   LIMPIAR TODO
-   ═══════════════════════════════════════════════════════ */
-async function limpiarTodo() {
-    if (!confirm('¿Borrar TODO el historial? Esta acción no se puede deshacer.')) return;
-    try {
-        const snapshot = await getDocs(collection(db, COL));
-        await Promise.all(snapshot.docs.map(d => deleteDoc(doc(db, COL, d.id))));
-        alert('Historial borrado.');
-    } catch (e) {
-        alert('Error al borrar: ' + e.message);
-    }
-}
-window.limpiarTodo = limpiarTodo;
