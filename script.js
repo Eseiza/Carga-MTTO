@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
 import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-storage.js";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-storage.js";
 
 const firebaseConfig = {
     apiKey:            "AIzaSyD6uhwhiF-_j5oyu4NBZug3zU7SHwaY4_M",
@@ -22,7 +22,243 @@ let userActual  = null;
 let miGrafica   = null;
 let unsubscribe = null;
 
-/* ─── ADJUNTO: UI ─────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════
+   MODAL DE DETALLE / EDICIÓN (CRUD)
+   ═══════════════════════════════════════════════════════ */
+
+// Abre el modal en modo "ver"
+window.abrirDetalle = function(firestoreId) {
+    const r = inventario.find(x => x.firestoreId === firestoreId);
+    if (!r) return;
+    renderModalVer(r);
+    document.getElementById('modalOverlay').classList.add('modal-open');
+    document.body.style.overflow = 'hidden';
+};
+
+// Cierra el modal
+window.cerrarModal = function() {
+    document.getElementById('modalOverlay').classList.remove('modal-open');
+    document.body.style.overflow = '';
+};
+
+// Cierra si se hace clic en el backdrop
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('modalOverlay')?.addEventListener('click', e => {
+        if (e.target.id === 'modalOverlay') window.cerrarModal();
+    });
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') window.cerrarModal();
+    });
+});
+
+/* ── MODO VER ─────────────────────────────────────────── */
+function renderModalVer(r) {
+    const ep   = r.EstadoPago || 'pendiente';
+    const info = estadoPagoInfo(ep);
+
+    const proyectoBadge = r.Proyecto
+        ? `<span class="proyecto-badge proyecto-${r.Proyecto.toLowerCase()}" style="font-size:12px;padding:3px 10px;">${r.Proyecto}</span>`
+        : '';
+
+    // Adjunto
+    let adjuntoBlock = '';
+    if (r.AdjuntoURL) {
+        const esPDF = r.AdjuntoTipo === 'application/pdf' || (r.AdjuntoNombre||'').toLowerCase().endsWith('.pdf');
+        if (esPDF) {
+            adjuntoBlock = `
+            <div class="modal-adjunto-wrap">
+                <a href="${r.AdjuntoURL}" target="_blank" class="modal-adjunto-btn adjunto-pdf">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                         fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    Ver PDF · ${r.AdjuntoNombre || 'Adjunto'}
+                </a>
+            </div>`;
+        } else {
+            adjuntoBlock = `
+            <div class="modal-adjunto-wrap">
+                <a href="${r.AdjuntoURL}" target="_blank">
+                    <img src="${r.AdjuntoURL}" alt="Adjunto" class="modal-adjunto-img">
+                </a>
+                <p class="modal-adjunto-label">${r.AdjuntoNombre || 'Ver imagen'}</p>
+            </div>`;
+        }
+    }
+
+    // Botones de acción según rol
+    let acciones = '';
+    if (puedeEliminar()) {
+        acciones += `<button class="btn btn-danger modal-btn-sm" onclick="eliminarDesdeModal('${r.firestoreId}')">✕ Eliminar</button>`;
+    }
+    // Solo admin y romero pueden editar
+    if (['admin','romero'].includes(userActual)) {
+        acciones += `<button class="btn btn-edit modal-btn-sm" onclick="renderModalEditar('${r.firestoreId}')">✎ Editar</button>`;
+    }
+
+    document.getElementById('modalContent').innerHTML = `
+        <div class="modal-header">
+            <div class="modal-header-left">
+                <span class="estado-pill" style="background:${info.bg};color:${info.color};font-size:11px;">${info.label}</span>
+                ${proyectoBadge}
+            </div>
+            <button class="modal-close" onclick="cerrarModal()">✕</button>
+        </div>
+
+        <h2 class="modal-titulo">${r.Pieza}</h2>
+        <div class="modal-total">$${parseFloat(r.Total).toLocaleString('es-AR', {minimumFractionDigits:2})}</div>
+
+        <div class="modal-grid">
+            <div class="modal-field">
+                <span class="modal-label">Código</span>
+                <span class="modal-value">${r.Codigo || '—'}</span>
+            </div>
+            <div class="modal-field">
+                <span class="modal-label">N° Factura</span>
+                <span class="modal-value">${r.Factura || '—'}</span>
+            </div>
+            <div class="modal-field">
+                <span class="modal-label">Estado pieza</span>
+                <span class="modal-value">${r.Estado || '—'}</span>
+            </div>
+            <div class="modal-field">
+                <span class="modal-label">Proyecto</span>
+                <span class="modal-value">${r.Proyecto || '—'}</span>
+            </div>
+            <div class="modal-field">
+                <span class="modal-label">Cantidad</span>
+                <span class="modal-value">${r.Cantidad}</span>
+            </div>
+            <div class="modal-field">
+                <span class="modal-label">Precio unitario</span>
+                <span class="modal-value">$${parseFloat(r.Precio_Unit).toLocaleString('es-AR', {minimumFractionDigits:2})}</span>
+            </div>
+            <div class="modal-field">
+                <span class="modal-label">Fecha</span>
+                <span class="modal-value">${r.Fecha} ${r.Hora}</span>
+            </div>
+            <div class="modal-field">
+                <span class="modal-label">Registrado por</span>
+                <span class="modal-value">${r.Usuario}</span>
+            </div>
+        </div>
+
+        ${r.Descripcion ? `
+        <div class="modal-desc-wrap">
+            <span class="modal-label">Descripción</span>
+            <p class="modal-desc">${r.Descripcion}</p>
+        </div>` : ''}
+
+        ${adjuntoBlock}
+
+        ${acciones ? `<div class="modal-acciones">${acciones}</div>` : ''}
+    `;
+}
+
+/* ── MODO EDITAR ──────────────────────────────────────── */
+window.renderModalEditar = function(firestoreId) {
+    const r = inventario.find(x => x.firestoreId === firestoreId);
+    if (!r) return;
+
+    document.getElementById('modalContent').innerHTML = `
+        <div class="modal-header">
+            <span style="font-family:'Lora',serif;font-size:15px;color:var(--brown-mid);font-weight:600;">Editar registro</span>
+            <button class="modal-close" onclick="cerrarModal()">✕</button>
+        </div>
+
+        <div class="modal-edit-grid">
+            <div class="field">
+                <label>Nombre Pieza</label>
+                <input type="text" id="edit-pieza" value="${r.Pieza || ''}">
+            </div>
+            <div class="field">
+                <label>Código</label>
+                <input type="text" id="edit-codigo" value="${r.Codigo || ''}">
+            </div>
+            <div class="field">
+                <label>N° Factura</label>
+                <input type="text" id="edit-factura" value="${r.Factura || ''}">
+            </div>
+            <div class="field">
+                <label>Proyecto</label>
+                <select id="edit-proyecto">
+                    <option value="Nuevo"    ${(r.Proyecto||'') === 'Nuevo'    ? 'selected' : ''}>Nuevo</option>
+                    <option value="Repuesto" ${(r.Proyecto||'') === 'Repuesto' ? 'selected' : ''}>Repuesto</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>Estado pieza</label>
+                <select id="edit-estado">
+                    <option value="Nueva"  ${(r.Estado||'') === 'Nueva'  ? 'selected' : ''}>Nueva</option>
+                    <option value="Usada"  ${(r.Estado||'') === 'Usada'  ? 'selected' : ''}>Usada</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>Cantidad</label>
+                <input type="number" id="edit-cantidad" value="${r.Cantidad || 1}" min="1">
+            </div>
+            <div class="field">
+                <label>Precio Unitario ($)</label>
+                <input type="number" id="edit-preciounit" value="${parseFloat(r.Precio_Unit) || 0}" min="0" class="highlight-input">
+            </div>
+            <div class="field" style="grid-column:1/-1;">
+                <label>Descripción</label>
+                <textarea id="edit-descripcion">${r.Descripcion || ''}</textarea>
+            </div>
+        </div>
+
+        <div class="modal-acciones">
+            <button class="btn btn-logout modal-btn-sm" onclick="abrirDetalle('${firestoreId}')">← Cancelar</button>
+            <button class="btn btn-register modal-btn-sm" onclick="guardarEdicion('${firestoreId}')">✔ Guardar cambios</button>
+        </div>
+    `;
+};
+
+/* ── GUARDAR EDICIÓN ──────────────────────────────────── */
+window.guardarEdicion = async function(firestoreId) {
+    const cant  = parseInt(document.getElementById('edit-cantidad').value) || 1;
+    const punit = parseFloat(document.getElementById('edit-preciounit').value) || 0;
+
+    const cambios = {
+        Pieza:       document.getElementById('edit-pieza').value.trim(),
+        Codigo:      document.getElementById('edit-codigo').value.trim(),
+        Factura:     document.getElementById('edit-factura').value.trim(),
+        Proyecto:    document.getElementById('edit-proyecto').value,
+        Estado:      document.getElementById('edit-estado').value,
+        Cantidad:    cant,
+        Precio_Unit: punit.toFixed(2),
+        Total:       (punit * cant).toFixed(2),
+        Descripcion: document.getElementById('edit-descripcion').value.trim(),
+    };
+
+    if (!cambios.Pieza) { alert('El nombre de la pieza es obligatorio.'); return; }
+
+    try {
+        await updateDoc(doc(db, COL, firestoreId), cambios);
+        // Refrescar y volver a modo ver
+        const actualizado = { ...inventario.find(x => x.firestoreId === firestoreId), ...cambios };
+        renderModalVer(actualizado);
+    } catch (e) {
+        alert('Error al guardar: ' + e.message);
+    }
+};
+
+/* ── ELIMINAR DESDE MODAL ─────────────────────────────── */
+window.eliminarDesdeModal = async function(firestoreId) {
+    if (!puedeEliminar()) return;
+    if (!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
+    try {
+        await deleteDoc(doc(db, COL, firestoreId));
+        window.cerrarModal();
+    } catch (e) {
+        alert('Error al eliminar: ' + e.message);
+    }
+};
+
+/* ═══════════════════════════════════════════════════════
+   ADJUNTO: UI (formulario nuevo registro)
+   ═══════════════════════════════════════════════════════ */
 window.mostrarNombreArchivo = function() {
     const input   = document.getElementById('archivoAdjunto');
     const label   = document.getElementById('adjuntoLabel');
@@ -33,7 +269,6 @@ window.mostrarNombreArchivo = function() {
     const file = input.files[0];
     label.textContent = file.name;
     btnQ.classList.remove('hidden');
-
     preview.classList.remove('hidden');
     preview.innerHTML = '';
 
@@ -47,9 +282,6 @@ window.mostrarNombreArchivo = function() {
                      fill="none" stroke="#c8420a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                     <polyline points="14 2 14 8 20 8"/>
-                    <line x1="16" y1="13" x2="8" y2="13"/>
-                    <line x1="16" y1="17" x2="8" y2="17"/>
-                    <polyline points="10 9 9 9 8 9"/>
                 </svg>
                 <span>${file.name}</span>
             </div>`;
@@ -68,7 +300,9 @@ window.quitarAdjunto = function() {
     preview.innerHTML = '';
 };
 
-/* ─── PRECIO ──────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════
+   PRECIO
+   ═══════════════════════════════════════════════════════ */
 function cambiarEtiquetaPrecio() {
     const modo = document.getElementById('modoPrecio').value;
     document.getElementById('labelMonto').innerText =
@@ -76,7 +310,9 @@ function cambiarEtiquetaPrecio() {
 }
 window.cambiarEtiquetaPrecio = cambiarEtiquetaPrecio;
 
-/* ─── HELPERS ─────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════════════════ */
 function estadoPagoInfo(ep) {
     if (ep === 'habilitado') return { label: 'Habilitado', color: '#854f0b', bg: '#faeeda' };
     if (ep === 'pagado')     return { label: 'Pagado',     color: '#27500a', bg: '#eaf3de' };
@@ -87,7 +323,9 @@ function puedeEliminar()     { return ['guillermo','romero','admin'].includes(us
 function puedeHabilitar()    { return ['romero','admin'].includes(userActual); }
 function puedeMarcarPagado() { return ['romero','admin','oficina'].includes(userActual); }
 
-/* ─── LOGIN / LOGOUT ──────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════
+   LOGIN / LOGOUT
+   ═══════════════════════════════════════════════════════ */
 const CLAVES = {
     guillermo: 'Guillermo123456',
     romero:    'Romero.2026',
@@ -150,7 +388,7 @@ function mostrarTabs(ids) {
 function activarTab(id) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => { c.classList.remove('active'); c.classList.add('hidden'); });
-    const btn = document.querySelector(`[data-tab="${id}"]`);
+    const btn     = document.querySelector(`[data-tab="${id}"]`);
     const content = document.getElementById(id);
     if (btn) btn.classList.add('active');
     if (content) { content.classList.remove('hidden'); content.classList.add('active'); }
@@ -161,7 +399,9 @@ function activarTab(id) {
 }
 window.activarTab = activarTab;
 
-/* ─── FIRESTORE: SUSCRIPCIÓN EN TIEMPO REAL ──────────── */
+/* ═══════════════════════════════════════════════════════
+   FIRESTORE: SUSCRIPCIÓN EN TIEMPO REAL
+   ═══════════════════════════════════════════════════════ */
 function suscribirFirestore() {
     const q = query(collection(db, COL), orderBy('timestamp', 'asc'));
     unsubscribe = onSnapshot(q, (snapshot) => {
@@ -179,7 +419,9 @@ function refrescarVistasActivas() {
     if (id === 'tab-admin')    { setTimeout(initChart, 100); actualizarComparador(); }
 }
 
-/* ─── REGISTRAR PIEZA ─────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════
+   REGISTRAR PIEZA
+   ═══════════════════════════════════════════════════════ */
 async function agregarDato() {
     const nombre = document.getElementById('nombrePieza').value.trim();
     const cant   = parseInt(document.getElementById('cantidad').value) || 0;
@@ -197,48 +439,44 @@ async function agregarDato() {
 
     const ahora = new Date();
 
-    // ── Subir archivo adjunto si existe ──
-    let adjuntoURL  = '';
-    let adjuntoNombre = '';
-    let adjuntoTipo = '';
+    let adjuntoURL = '', adjuntoNombre = '', adjuntoTipo = '';
     const fileInput = document.getElementById('archivoAdjunto');
     const file      = fileInput.files && fileInput.files[0];
 
     if (file) {
         try {
-            const ext      = file.name.split('.').pop();
+            const ext           = file.name.split('.').pop();
             const nombreArchivo = `adjuntos/${ahora.getTime()}_${nombre.replace(/\s+/g,'_')}.${ext}`;
-            const storageRef   = ref(storage, nombreArchivo);
+            const storageRef    = ref(storage, nombreArchivo);
             await uploadBytes(storageRef, file);
             adjuntoURL    = await getDownloadURL(storageRef);
             adjuntoNombre = file.name;
             adjuntoTipo   = file.type;
         } catch (e) {
             console.warn('No se pudo subir el adjunto:', e.message);
-            // Continúa el registro sin adjunto si falla el upload
         }
     }
 
     const registro = {
-        timestamp:    ahora.getTime(),
-        Mes:          ahora.toLocaleString('es-ES', { month: 'long' }),
-        Fecha:        ahora.toLocaleDateString('es-AR'),
-        Hora:         ahora.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        Usuario:      userActual,
-        Pieza:        nombre,
-        Codigo:       document.getElementById('codigoPieza').value.trim(),
-        Factura:      document.getElementById('numFactura').value.trim(),
-        Proyecto:     document.getElementById('proyectoPieza').value,   // ← Nuevo
-        Estado:       document.getElementById('tipoPieza').value,        // Nueva / Usada
-        Cantidad:     cant,
-        Precio_Unit:  precioUnitario.toFixed(2),
-        Total:        precioTotal.toFixed(2),
-        Modo_Ingreso: modo,
-        Descripcion:  document.getElementById('descripcion').value.trim(),
-        EstadoPago:   'pendiente',
-        AdjuntoURL:   adjuntoURL,
+        timestamp:     ahora.getTime(),
+        Mes:           ahora.toLocaleString('es-ES', { month: 'long' }),
+        Fecha:         ahora.toLocaleDateString('es-AR'),
+        Hora:          ahora.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        Usuario:       userActual,
+        Pieza:         nombre,
+        Codigo:        document.getElementById('codigoPieza').value.trim(),
+        Factura:       document.getElementById('numFactura').value.trim(),
+        Proyecto:      document.getElementById('proyectoPieza').value,
+        Estado:        document.getElementById('tipoPieza').value,
+        Cantidad:      cant,
+        Precio_Unit:   precioUnitario.toFixed(2),
+        Total:         precioTotal.toFixed(2),
+        Modo_Ingreso:  modo,
+        Descripcion:   document.getElementById('descripcion').value.trim(),
+        EstadoPago:    'pendiente',
+        AdjuntoURL:    adjuntoURL,
         AdjuntoNombre: adjuntoNombre,
-        AdjuntoTipo:  adjuntoTipo
+        AdjuntoTipo:   adjuntoTipo
     };
 
     try {
@@ -255,7 +493,9 @@ async function agregarDato() {
 }
 window.agregarDato = agregarDato;
 
-/* ─── ELIMINAR ────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════
+   ELIMINAR (desde lista — mantiene compatibilidad)
+   ═══════════════════════════════════════════════════════ */
 async function eliminarRegistro(firestoreId) {
     if (!puedeEliminar()) return;
     if (!confirm('¿Eliminar este registro?')) return;
@@ -272,32 +512,34 @@ async function eliminarPago(firestoreId) {
 }
 window.eliminarPago = eliminarPago;
 
-/* ─── RENDER: ÍCONO ADJUNTO ───────────────────────────── */
+/* ═══════════════════════════════════════════════════════
+   RENDER: ícono adjunto pequeño (listas)
+   ═══════════════════════════════════════════════════════ */
 function adjuntoHTML(r) {
     if (!r.AdjuntoURL) return '';
-    const esPDF = r.AdjuntoTipo === 'application/pdf' || (r.AdjuntoNombre && r.AdjuntoNombre.toLowerCase().endsWith('.pdf'));
+    const esPDF = r.AdjuntoTipo === 'application/pdf' || (r.AdjuntoNombre||'').toLowerCase().endsWith('.pdf');
     if (esPDF) {
-        return `<a href="${r.AdjuntoURL}" target="_blank" class="adjunto-link adjunto-pdf" title="${r.AdjuntoNombre || 'Ver PDF'}">
-            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
-                 fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        return `<a href="${r.AdjuntoURL}" target="_blank" class="adjunto-link adjunto-pdf"
+                   onclick="event.stopPropagation()" title="${r.AdjuntoNombre || 'Ver PDF'}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                 <polyline points="14 2 14 8 20 8"/>
-            </svg>
-            PDF
-        </a>`;
+            </svg> PDF</a>`;
     }
-    return `<a href="${r.AdjuntoURL}" target="_blank" class="adjunto-link adjunto-img" title="${r.AdjuntoNombre || 'Ver imagen'}">
-        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
-             fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    return `<a href="${r.AdjuntoURL}" target="_blank" class="adjunto-link adjunto-img"
+               onclick="event.stopPropagation()" title="${r.AdjuntoNombre || 'Ver imagen'}">
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
             <circle cx="8.5" cy="8.5" r="1.5"/>
             <polyline points="21 15 16 10 5 21"/>
-        </svg>
-        Foto
-    </a>`;
+        </svg> Foto</a>`;
 }
 
-/* ─── HISTORIAL ───────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════
+   HISTORIAL
+   ═══════════════════════════════════════════════════════ */
 function renderHistorial() {
     const lista = document.getElementById('historialList');
     if (!lista) return;
@@ -315,14 +557,13 @@ function renderHistorial() {
         const ep   = r.EstadoPago || 'pendiente';
         const info = estadoPagoInfo(ep);
         const btnEliminar = puedeEliminar()
-            ? `<button class="btn-eliminar" onclick="eliminarRegistro('${r.firestoreId}')" title="Eliminar">✕</button>`
+            ? `<button class="btn-eliminar" onclick="event.stopPropagation();eliminarRegistro('${r.firestoreId}')" title="Eliminar">✕</button>`
             : '';
-        // Proyecto badge
         const proyectoBadge = r.Proyecto
             ? `<span class="proyecto-badge proyecto-${r.Proyecto.toLowerCase()}">${r.Proyecto}</span>`
             : '';
         return `
-        <div class="historial-item">
+        <div class="historial-item clickable-row" onclick="abrirDetalle('${r.firestoreId}')">
             <div class="estado-barra" style="background:${info.color}"></div>
             <div class="historial-info">
                 <div class="historial-nombre">${r.Pieza} ${proyectoBadge}</div>
@@ -345,7 +586,9 @@ function renderHistorial() {
     }).join('');
 }
 
-/* ─── PAGOS ───────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════
+   PAGOS
+   ═══════════════════════════════════════════════════════ */
 let filtroActual = 'todos';
 
 function renderPagos(filtro) {
@@ -398,14 +641,14 @@ function renderPagos(filtro) {
 
         let acciones = '';
         if (ep === 'pendiente'  && puedeHabilitar())
-            acciones += `<button class="pago-toggle" onclick="cambiarEstadoPago('${r.firestoreId}','habilitado')" style="border-color:#ef9f27;color:#854f0b;">Habilitar</button>`;
+            acciones += `<button class="pago-toggle" onclick="event.stopPropagation();cambiarEstadoPago('${r.firestoreId}','habilitado')" style="border-color:#ef9f27;color:#854f0b;">Habilitar</button>`;
         if (ep === 'habilitado' && puedeMarcarPagado())
-            acciones += `<button class="pago-toggle" onclick="cambiarEstadoPago('${r.firestoreId}','pagado')" style="border-color:#639922;color:#27500a;">Marcar pagado</button>`;
+            acciones += `<button class="pago-toggle" onclick="event.stopPropagation();cambiarEstadoPago('${r.firestoreId}','pagado')" style="border-color:#639922;color:#27500a;">Marcar pagado</button>`;
         if (ep === 'pagado'     && puedeHabilitar())
-            acciones += `<button class="pago-toggle" onclick="cambiarEstadoPago('${r.firestoreId}','habilitado')" style="border-color:#ef9f27;color:#854f0b;font-size:11px;">Revertir</button>`;
+            acciones += `<button class="pago-toggle" onclick="event.stopPropagation();cambiarEstadoPago('${r.firestoreId}','habilitado')" style="border-color:#ef9f27;color:#854f0b;font-size:11px;">Revertir</button>`;
 
         const btnEliminar = puedeEliminar()
-            ? `<button class="btn-eliminar" onclick="eliminarPago('${r.firestoreId}')" title="Eliminar">✕</button>`
+            ? `<button class="btn-eliminar" onclick="event.stopPropagation();eliminarPago('${r.firestoreId}')" title="Eliminar">✕</button>`
             : '';
 
         const proyectoBadge = r.Proyecto
@@ -413,7 +656,8 @@ function renderPagos(filtro) {
             : '';
 
         return `
-        <div class="pago-item" style="border-left:4px solid ${info.color};padding-left:14px;">
+        <div class="pago-item clickable-row" style="border-left:4px solid ${info.color};padding-left:14px;"
+             onclick="abrirDetalle('${r.firestoreId}')">
             <div class="pago-info">
                 <div class="pago-nombre">${r.Pieza} ${proyectoBadge}</div>
                 <div class="pago-meta">
@@ -453,7 +697,9 @@ async function cambiarEstadoPago(firestoreId, nuevoEstado) {
 }
 window.cambiarEstadoPago = cambiarEstadoPago;
 
-/* ─── GRÁFICA ─────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════
+   GRÁFICA
+   ═══════════════════════════════════════════════════════ */
 function initChart() {
     const ctx = document.getElementById('miGrafica');
     if (!ctx) return;
@@ -488,7 +734,9 @@ function initChart() {
     });
 }
 
-/* ─── COMPARATIVA MENSUAL ─────────────────────────────── */
+/* ═══════════════════════════════════════════════════════
+   COMPARATIVA MENSUAL
+   ═══════════════════════════════════════════════════════ */
 function actualizarComparador() {
     const grid = document.getElementById('statsGrid');
     if (!grid) return;
@@ -506,7 +754,9 @@ function actualizarComparador() {
     }
 }
 
-/* ─── EXCEL ───────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════
+   EXCEL
+   ═══════════════════════════════════════════════════════ */
 function exportarExcel() {
     if (inventario.length === 0) { alert('No hay registros para exportar.'); return; }
     const wb    = XLSX.utils.book_new();
@@ -520,7 +770,9 @@ function exportarExcel() {
 }
 window.exportarExcel = exportarExcel;
 
-/* ─── LIMPIAR TODO ────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════
+   LIMPIAR TODO
+   ═══════════════════════════════════════════════════════ */
 async function limpiarTodo() {
     if (!confirm('¿Borrar TODO el historial? Esta acción no se puede deshacer.')) return;
     try {
@@ -532,7 +784,3 @@ async function limpiarTodo() {
     }
 }
 window.limpiarTodo = limpiarTodo;
-
-/* ─── LEYENDA ESTADOS (historial) ─────────────────────── */
-// Compatible con registros viejos que tenían Estado: "Nueva"/"Repuesto"
-// Ahora Estado = "Nueva"/"Usada" y Proyecto = "Nuevo"/"Repuesto"
