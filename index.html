@@ -1,190 +1,936 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Pagos MTTO · Romero Panificados</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <link rel="stylesheet" href="styles.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestión de Pagos MTTO · Romero Panificados</title>
+
+<!-- Firebase compat (NO ES modules — evita el error de import) -->
+<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-storage-compat.js"></script>
+
+<!-- Chart.js y SheetJS -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,600;1,400&family=Nunito:wght@400;600;700&display=swap');
+
+:root {
+  --gold:        #c8860a;
+  --red:         #c8420a;
+  --brown:       #3a200a;
+  --brown-mid:   #7a4a20;
+  --brown-light: #a07840;
+  --cream:       #fdf8f0;
+  --cream-dark:  #f7f0e6;
+  --cream-mid:   #fdf5e4;
+  --border:      #ddd0b8;
+  --border-light:#f0e4cc;
+  --green:       #3d7a3a;
+  --shadow:      0 8px 40px rgba(100,60,10,0.10);
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+
+body {
+  font-family:'Nunito',sans-serif;
+  background:var(--cream-dark);
+  background-image:
+    radial-gradient(circle at 20% 20%,rgba(200,134,10,0.06) 0%,transparent 50%),
+    radial-gradient(circle at 80% 80%,rgba(200,66,10,0.04) 0%,transparent 50%);
+  min-height:100vh;
+  padding:24px 16px;
+}
+.hidden{display:none!important;}
+
+/* ── LOGIN ── */
+.login-wrap{min-height:calc(100vh - 48px);display:flex;align-items:center;justify-content:center;}
+.login-card{width:100%;max-width:400px;background:#fff;border-radius:20px;border:1.5px solid var(--border);overflow:hidden;box-shadow:var(--shadow);}
+.login-header{padding:32px 36px 24px;border-bottom:1.5px solid var(--border-light);display:flex;flex-direction:column;align-items:center;gap:10px;}
+.login-logo{height:56px;object-fit:contain;}
+.login-body{padding:26px 36px 32px;}
+.login-footer{padding:12px 36px;background:var(--cream-mid);border-top:1.5px solid var(--border-light);display:flex;align-items:center;justify-content:center;gap:10px;}
+.footer-dot{width:4px;height:4px;border-radius:50%;background:#c8a060;flex-shrink:0;}
+.login-footer span{font-size:11px;font-weight:700;color:var(--brown-light);letter-spacing:.4px;}
+
+/* ── FIELDS ── */
+.field{margin-bottom:18px;}
+.field label{font-size:11px;font-weight:700;color:var(--brown-light);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:7px;}
+.field input,.field select,.field textarea{width:100%;padding:11px 15px;border:1.5px solid var(--border);border-radius:10px;font-family:'Nunito',sans-serif;font-size:14px;font-weight:600;color:var(--brown);background:var(--cream);transition:border-color .2s,background .2s;appearance:none;-webkit-appearance:none;}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--gold);background:#fff;}
+.field textarea{resize:vertical;min-height:64px;}
+.highlight-input{border-color:var(--gold)!important;background:#fffbf0!important;}
+
+/* ── BOTONES ── */
+.btn{cursor:pointer;font-family:'Nunito',sans-serif;font-weight:700;border-radius:10px;border:none;transition:background .2s,color .2s,transform .1s;}
+.btn:active{transform:scale(.98);}
+.btn-primary{width:100%;padding:14px;background:var(--cream);color:var(--red);border:2px solid var(--red)!important;font-family:'Lora',serif;font-size:16px;font-weight:600;margin-top:8px;}
+.btn-primary:hover{background:var(--red);color:var(--cream);}
+.btn-register{width:100%;padding:14px;background:var(--brown);color:var(--cream);font-family:'Lora',serif;font-size:15px;font-weight:600;}
+.btn-register:hover{background:#5a3010;}
+.btn-excel{flex:1;padding:11px 16px;background:var(--green);color:#fff;font-size:13px;}
+.btn-excel:hover{background:#2d5e2a;}
+.btn-danger{padding:11px 16px;background:#b83030;color:#fff;font-size:13px;}
+.btn-danger:hover{background:#902020;}
+.btn-logout{padding:7px 16px;background:var(--cream-mid);color:var(--brown-mid);border:1.5px solid var(--border)!important;font-size:13px;font-weight:700;}
+.btn-logout:hover{background:var(--border-light);}
+.btn-edit{background:var(--brown-mid);color:var(--cream);padding:9px 18px;font-size:13px;}
+.btn-edit:hover{background:var(--brown);}
+
+/* ── PANEL ── */
+.container{max-width:1040px;margin:0 auto;background:#fff;border-radius:20px;border:1.5px solid var(--border);overflow:hidden;box-shadow:var(--shadow);}
+.panel-header{display:flex;justify-content:space-between;align-items:center;padding:20px 32px;background:var(--cream-mid);border-bottom:1.5px solid var(--border-light);}
+.panel-header-left{display:flex;align-items:center;gap:16px;}
+.panel-logo{height:40px;object-fit:contain;}
+.panel-header-text h2{font-family:'Lora',serif;font-size:17px;font-weight:600;color:var(--brown);line-height:1.2;}
+.role-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.6px;margin-top:3px;}
+
+/* ── TABS ── */
+.tabs{display:flex;border-bottom:1.5px solid var(--border-light);background:#fff;padding:0 32px;}
+.tab-btn{padding:14px 22px;font-family:'Nunito',sans-serif;font-size:13px;font-weight:700;color:var(--brown-light);background:transparent;border:none;border-bottom:3px solid transparent;cursor:pointer;transition:color .2s,border-color .2s;margin-bottom:-1.5px;letter-spacing:.3px;}
+.tab-btn:hover{color:var(--brown);}
+.tab-btn.active{color:var(--red);border-bottom-color:var(--red);}
+.tab-content{display:none;padding:28px 32px 32px;}
+.tab-content.active{display:block;}
+
+/* ── FORM ── */
+.section-title{font-family:'Lora',serif;font-size:15px;font-weight:600;color:var(--brown-mid);margin-bottom:16px;display:flex;align-items:center;gap:10px;}
+.section-title::after{content:'';flex:1;height:1px;background:var(--border-light);}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;background:var(--cream);border:1.5px solid var(--border-light);border-radius:14px;padding:22px;margin-bottom:22px;}
+.full-width{grid-column:1/-1;}
+
+/* ── ADJUNTO ── */
+.adjunto-wrap{display:flex;align-items:center;gap:10px;}
+.btn-clip{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;background:#fff;border:1.5px dashed var(--border);border-radius:10px;cursor:pointer;font-family:'Nunito',sans-serif;font-size:13px;font-weight:700;color:var(--brown-light);transition:border-color .2s,color .2s,background .2s;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:none;}
+.btn-clip:hover{border-color:var(--gold);color:var(--brown);background:var(--cream);}
+.btn-clip svg{flex-shrink:0;color:var(--gold);}
+.btn-quitar-adjunto{flex-shrink:0;width:30px;height:30px;border-radius:50%;border:1.5px solid #f09595;background:#fff0f0;color:#b83030;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s;line-height:1;padding:0;}
+.btn-quitar-adjunto:hover{background:#ffd5d5;}
+.preview-adjunto{margin-top:10px;border-radius:10px;overflow:hidden;border:1.5px solid var(--border-light);background:#fff;}
+.preview-img{display:block;max-height:180px;max-width:100%;object-fit:contain;margin:0 auto;padding:8px;}
+.preview-pdf{display:flex;align-items:center;gap:10px;padding:12px 16px;font-size:13px;font-weight:600;color:var(--brown-mid);}
+
+/* ── LEYENDA / HINT ── */
+.leyenda-estados{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.leyenda-item{font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;letter-spacing:.3px;}
+.hint-click{font-size:11px;color:var(--brown-light);font-style:italic;margin-bottom:12px;}
+
+/* ── HISTORIAL ── */
+.historial-list,.pagos-list{display:flex;flex-direction:column;gap:10px;}
+.historial-item,.pago-item{display:flex;align-items:center;justify-content:space-between;background:var(--cream);border:1.5px solid var(--border-light);border-radius:12px;padding:14px 18px;gap:12px;transition:border-color .2s;position:relative;}
+.historial-item:hover,.pago-item:hover{border-color:var(--gold);}
+.estado-barra{width:4px;align-self:stretch;border-radius:4px;flex-shrink:0;}
+.historial-info,.pago-info{flex:1;min-width:0;}
+.historial-nombre,.pago-nombre{font-family:'Lora',serif;font-size:15px;font-weight:600;color:var(--brown);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.historial-meta,.pago-meta{font-size:12px;color:var(--brown-light);margin-top:3px;}
+.historial-total,.pago-total{font-family:'Lora',serif;font-size:16px;font-weight:600;color:var(--brown-mid);white-space:nowrap;}
+.historial-fecha{font-size:11px;color:var(--brown-light);text-align:right;white-space:nowrap;}
+.historial-empty,.pagos-empty{text-align:center;padding:40px 20px;color:var(--brown-light);font-size:14px;font-style:italic;}
+.pago-right{display:flex;align-items:center;gap:14px;flex-shrink:0;}
+
+/* ── ESTADO PILL ── */
+.estado-pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-top:3px;}
+
+/* ── PROYECTO BADGE ── */
+.proyecto-badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;vertical-align:middle;margin-left:5px;}
+.proyecto-nuevo{background:#e8f4ff;color:#1a5a9a;border:1px solid #b0d4f5;}
+.proyecto-repuesto{background:#fdf0e0;color:var(--brown-mid);border:1px solid var(--border);}
+
+/* ── BTN ELIMINAR ── */
+.btn-eliminar{width:28px;height:28px;border-radius:50%;border:1.5px solid #f09595;background:#fff0f0;color:#b83030;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .2s;line-height:1;padding:0;}
+.btn-eliminar:hover{background:#ffd5d5;}
+
+/* ── ADJUNTO LINKS PEQUEÑOS ── */
+.adjunto-link{display:inline-flex;align-items:center;gap:4px;margin-top:4px;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;text-decoration:none;transition:background .15s;letter-spacing:.2px;}
+.adjunto-pdf{background:#fff0ee;color:var(--red);border:1px solid #f8c4bb;}
+.adjunto-pdf:hover{background:#ffd8d0;}
+.adjunto-img{background:#f0f5ff;color:#2a5aa0;border:1px solid #bcd0f5;}
+.adjunto-img:hover{background:#d8e8ff;}
+
+/* ── PAGOS ── */
+.pagos-filtros{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;}
+.filtro-btn{padding:7px 16px;font-family:'Nunito',sans-serif;font-size:12px;font-weight:700;border-radius:20px;border:1.5px solid var(--border);background:#fff;color:var(--brown-light);cursor:pointer;transition:all .2s;letter-spacing:.3px;}
+.filtro-btn:hover{border-color:var(--gold);color:var(--brown);}
+.filtro-btn.active{background:var(--brown);color:var(--cream);border-color:var(--brown);}
+.pagos-resumen{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;}
+.resumen-card{flex:1;min-width:120px;background:var(--cream);border:1.5px solid var(--border-light);border-radius:12px;padding:14px 18px;text-align:center;}
+.resumen-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--brown-light);margin-bottom:6px;}
+.resumen-valor{font-family:'Lora',serif;font-size:20px;font-weight:600;color:var(--brown);}
+.pago-toggle{display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 12px;border-radius:8px;border:1.5px solid var(--border);background:#fff;transition:all .2s;font-family:'Nunito',sans-serif;font-size:12px;font-weight:700;color:var(--brown-light);white-space:nowrap;}
+.pago-toggle:hover{border-color:var(--green);color:var(--green);}
+
+/* ── ADMIN ── */
+.admin-actions{display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap;}
+.chart-wrapper{height:280px;margin-bottom:28px;background:var(--cream);border:1.5px solid var(--border-light);border-radius:14px;padding:16px;}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;}
+.stat-card{background:var(--cream);border:1.5px solid var(--border-light);border-radius:12px;padding:16px;text-align:center;transition:border-color .2s;}
+.stat-card:hover{border-color:var(--gold);}
+.stat-month{font-size:11px;font-weight:700;text-transform:capitalize;color:var(--brown-light);letter-spacing:.5px;margin-bottom:6px;}
+.stat-value{font-family:'Lora',serif;font-size:20px;font-weight:600;color:var(--brown);}
+
+/* ── CLICKABLE ROWS ── */
+.clickable-row{cursor:pointer;}
+.clickable-row::after{content:'›';position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:18px;color:var(--border);transition:color .2s,right .15s;pointer-events:none;}
+.clickable-row:hover::after{color:var(--gold);right:10px;}
+
+/* ══ MODAL ══════════════════════════════════════════════ */
+.modal-overlay{position:fixed;inset:0;background:rgba(30,15,5,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px 16px;opacity:0;pointer-events:none;transition:opacity .22s ease;}
+.modal-overlay.modal-open{opacity:1;pointer-events:all;}
+.modal-overlay.modal-open .modal-card{transform:translateY(0) scale(1);opacity:1;}
+.modal-card{width:100%;max-width:560px;max-height:90vh;overflow-y:auto;background:#fff;border-radius:20px;border:1.5px solid var(--border);box-shadow:0 24px 80px rgba(60,30,5,.22);padding:28px 32px 32px;transform:translateY(18px) scale(.98);opacity:0;transition:transform .25s cubic-bezier(.22,1,.36,1),opacity .22s ease;}
+.modal-card::-webkit-scrollbar{width:5px;}
+.modal-card::-webkit-scrollbar-thumb{background:var(--border);border-radius:10px;}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+.modal-header-left{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.modal-close{width:32px;height:32px;border-radius:50%;border:1.5px solid var(--border);background:var(--cream);color:var(--brown-light);font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .2s,color .2s;line-height:1;padding:0;}
+.modal-close:hover{background:#ffd5d5;color:#b83030;border-color:#f09595;}
+.modal-titulo{font-family:'Lora',serif;font-size:22px;font-weight:600;color:var(--brown);margin-bottom:4px;line-height:1.2;}
+.modal-total{font-family:'Lora',serif;font-size:28px;font-weight:600;color:var(--gold);margin-bottom:22px;letter-spacing:-.5px;}
+.modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1.5px solid var(--border-light);border-radius:12px;overflow:hidden;margin-bottom:18px;}
+.modal-field{display:flex;flex-direction:column;gap:3px;padding:12px 16px;border-bottom:1px solid var(--border-light);border-right:1px solid var(--border-light);}
+.modal-field:nth-child(even){border-right:none;}
+.modal-field:nth-last-child(-n+2){border-bottom:none;}
+.modal-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--brown-light);}
+.modal-value{font-size:14px;font-weight:600;color:var(--brown);}
+.modal-desc-wrap{background:var(--cream);border:1.5px solid var(--border-light);border-radius:10px;padding:14px 16px;margin-bottom:18px;display:flex;flex-direction:column;gap:5px;}
+.modal-desc{font-size:14px;color:var(--brown);line-height:1.55;}
+.modal-adjunto-wrap{margin-bottom:20px;border:1.5px solid var(--border-light);border-radius:12px;overflow:hidden;background:var(--cream);}
+.modal-adjunto-img{display:block;width:100%;max-height:260px;object-fit:contain;padding:12px;}
+.modal-adjunto-label{font-size:11px;color:var(--brown-light);padding:4px 14px 10px;font-weight:600;}
+.modal-adjunto-btn{display:flex;align-items:center;gap:10px;padding:16px 20px;text-decoration:none;font-family:'Nunito',sans-serif;font-size:13px;font-weight:700;transition:background .2s;}
+.modal-adjunto-btn.adjunto-pdf{color:var(--red);background:#fff8f7;}
+.modal-adjunto-btn.adjunto-pdf:hover{background:#ffecea;}
+.modal-acciones{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap;}
+.modal-btn-sm{padding:9px 18px!important;font-size:13px!important;width:auto!important;}
+.modal-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:4px;}
+.modal-edit-grid .field{margin-bottom:0;}
+.modal-separator{height:1px;background:var(--border-light);margin:20px 0 16px;}
+
+@media(max-width:500px){
+  .modal-edit-grid,.modal-grid{grid-template-columns:1fr;}
+  .modal-field{border-right:none!important;}
+  .modal-card{padding:22px 18px 26px;}
+}
+</style>
 </head>
 <body>
 
-<!-- ══ LOGIN ═══════════════════════════════════════════ -->
+<!-- ══ LOGIN ══════════════════════════════════════════ -->
 <div id="loginSection" class="login-wrap">
-    <div class="login-card">
-        <div class="login-header">
-            <img src="https://www.romeropanificados.com.ar/wp-content/uploads/2023/01/Recurso-8.png"
-                 alt="Romero Panificados" class="login-logo" onerror="this.style.display='none'">
-        </div>
-        <div class="login-body">
-            <div class="field">
-                <label>¿Quién sos?</label>
-                <select id="userSelect">
-                    <option value="guillermo">Guillermo (Carga)</option>
-                    <option value="romero">Romero (Supervisor)</option>
-                    <option value="oficina">Oficina</option>
-                    <option value="admin">Administrador</option>
-                </select>
-            </div>
-            <div class="field">
-                <label>Contraseña</label>
-                <input type="password" id="passInput" placeholder="••••••••••">
-            </div>
-            <button class="btn btn-primary" onclick="login()">Entrar</button>
-        </div>
-        <div class="login-footer">
-            <div class="footer-dot"></div>
-            <span> TI 2026 </span>
-            <div class="footer-dot"></div>
-        </div>
+  <div class="login-card">
+    <div class="login-header">
+      <img src="https://www.romeropanificados.com.ar/wp-content/uploads/2023/01/Recurso-8.png"
+           alt="Romero Panificados" class="login-logo" onerror="this.style.display='none'">
     </div>
+    <div class="login-body">
+      <div class="field">
+        <label>¿Quién sos?</label>
+        <select id="userSelect">
+          <option value="guillermo">Guillermo (Carga)</option>
+          <option value="romero">Romero (Supervisor)</option>
+          <option value="oficina">Oficina</option>
+          <option value="admin">Administrador</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Contraseña</label>
+        <input type="password" id="passInput" placeholder="••••••••••"
+               onkeydown="if(event.key==='Enter')login()">
+      </div>
+      <button class="btn btn-primary" onclick="login()">Entrar</button>
+    </div>
+    <div class="login-footer">
+      <div class="footer-dot"></div><span>TI 2026</span><div class="footer-dot"></div>
+    </div>
+  </div>
 </div>
 
-<!-- ══ MODAL DETALLE / EDICIÓN ══════════════════════════ -->
-<div id="modalOverlay" class="modal-overlay">
-    <div class="modal-card" id="modalContent">
-        <!-- contenido inyectado por JS -->
-    </div>
+<!-- ══ MODAL ═══════════════════════════════════════════ -->
+<div id="modalOverlay" class="modal-overlay" onclick="if(event.target===this)cerrarModal()">
+  <div class="modal-card" id="modalContent"></div>
 </div>
 
-<!-- ══ PANEL PRINCIPAL ══════════════════════════════════ -->
+<!-- ══ PANEL PRINCIPAL ═════════════════════════════════ -->
 <div id="mainSection" class="container hidden">
 
-    <div class="panel-header">
-        <div class="panel-header-left">
-            <img src="https://www.romeropanificados.com.ar/wp-content/uploads/2023/01/Recurso-8.png"
-                 alt="Romero Panificados" class="panel-logo" onerror="this.style.display='none'">
-            <div class="panel-header-text">
-                <h2 id="welcomeText">Panel</h2>
-                <span id="badge" class="role-badge"></span>
-            </div>
-        </div>
-        <button class="btn btn-logout" onclick="logout()">Cerrar sesión</button>
+  <div class="panel-header">
+    <div class="panel-header-left">
+      <img src="https://www.romeropanificados.com.ar/wp-content/uploads/2023/01/Recurso-8.png"
+           alt="Romero Panificados" class="panel-logo" onerror="this.style.display='none'">
+      <div class="panel-header-text">
+        <h2 id="welcomeText">Panel</h2>
+        <span id="badge" class="role-badge"></span>
+      </div>
     </div>
+    <button class="btn btn-logout" onclick="logout()">Cerrar sesión</button>
+  </div>
 
-    <div class="tabs">
-        <button class="tab-btn hidden" data-tab="tab-carga"     onclick="activarTab('tab-carga')">Registrar</button>
-        <button class="tab-btn hidden" data-tab="tab-historial" onclick="activarTab('tab-historial')">Historial</button>
-        <button class="tab-btn hidden" data-tab="tab-pagos"     onclick="activarTab('tab-pagos')">Pagos</button>
-        <button class="tab-btn hidden" data-tab="tab-admin"     onclick="activarTab('tab-admin')">Administración</button>
-    </div>
+  <div class="tabs">
+    <button class="tab-btn hidden" data-tab="tab-carga"     onclick="activarTab('tab-carga')">Registrar</button>
+    <button class="tab-btn hidden" data-tab="tab-historial" onclick="activarTab('tab-historial')">Historial</button>
+    <button class="tab-btn hidden" data-tab="tab-pagos"     onclick="activarTab('tab-pagos')">Pagos</button>
+    <button class="tab-btn hidden" data-tab="tab-admin"     onclick="activarTab('tab-admin')">Administración</button>
+  </div>
 
-    <!-- ── REGISTRAR ─────────────────────────────────── -->
-    <div id="tab-carga" class="tab-content hidden">
-        <p class="section-title">Nueva pieza</p>
-        <div class="form-grid">
-            <div class="field">
-                <label>Nombre Pieza</label>
-                <input type="text" id="nombrePieza" placeholder="Ej: Correa dentada">
-            </div>
-            <div class="field">
-                <label>Código</label>
-                <input type="text" id="codigoPieza" placeholder="Ej: CD-001">
-            </div>
-            <div class="field">
-                <label>N° Factura</label>
-                <input type="text" id="numFactura" placeholder="Ej: 0001-00012345">
-            </div>
-            <div class="field">
-                <label>Proyecto</label>
-                <select id="proyectoPieza">
-                    <option value="Nuevo">Nuevo</option>
-                    <option value="Repuesto">Repuesto</option>
-                </select>
-            </div>
-            <div class="field">
-                <label>Estado</label>
-                <select id="tipoPieza">
-                    <option value="Nueva">Nueva</option>
-                    <option value="Usada">Usada</option>
-                </select>
-            </div>
-            <div class="field">
-                <label>Cantidad</label>
-                <input type="number" id="cantidad" value="1" min="1">
-            </div>
-            <div class="field">
-                <label>Tipo de Precio</label>
-                <select id="modoPrecio" onchange="cambiarEtiquetaPrecio()">
-                    <option value="unitario">Precio por Unidad</option>
-                    <option value="total">Precio Total (Factura)</option>
-                </select>
-            </div>
-            <div class="field">
-                <label id="labelMonto">Monto ($)</label>
-                <input type="number" id="valor" class="highlight-input" placeholder="0.00" min="0">
-            </div>
-            <div class="field full-width">
-                <label>Descripción</label>
-                <textarea id="descripcion" placeholder="Observaciones adicionales..."></textarea>
-            </div>
-            <div class="field full-width">
-                <label>Adjuntar Factura / Foto</label>
-                <div class="adjunto-wrap">
-                    <label class="btn-clip" for="archivoAdjunto" title="Adjuntar archivo">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
-                             fill="none" stroke="currentColor" stroke-width="2.2"
-                             stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19
-                                     a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-                        </svg>
-                        <span id="adjuntoLabel">Adjuntar archivo</span>
-                    </label>
-                    <input type="file" id="archivoAdjunto" accept="image/*,.pdf"
-                           onchange="mostrarNombreArchivo()" style="display:none;">
-                    <button type="button" id="btnQuitarAdjunto" class="btn-quitar-adjunto hidden"
-                            onclick="quitarAdjunto()" title="Quitar archivo">✕</button>
-                </div>
-                <div id="previewAdjunto" class="preview-adjunto hidden"></div>
-            </div>
+  <!-- REGISTRAR -->
+  <div id="tab-carga" class="tab-content hidden">
+    <p class="section-title">Nueva pieza</p>
+    <div class="form-grid">
+      <div class="field">
+        <label>Nombre Pieza</label>
+        <input type="text" id="nombrePieza" placeholder="Ej: Correa dentada">
+      </div>
+      <div class="field">
+        <label>Código</label>
+        <input type="text" id="codigoPieza" placeholder="Ej: CD-001">
+      </div>
+      <div class="field">
+        <label>N° Factura</label>
+        <input type="text" id="numFactura" placeholder="Ej: 0001-00012345">
+      </div>
+      <div class="field">
+        <label>Proyecto</label>
+        <select id="proyectoPieza">
+          <option value="Nuevo">Nuevo</option>
+          <option value="Repuesto">Repuesto</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Estado</label>
+        <select id="tipoPieza">
+          <option value="Nueva">Nueva</option>
+          <option value="Usada">Usada</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Cantidad</label>
+        <input type="number" id="cantidad" value="1" min="1">
+      </div>
+      <div class="field">
+        <label>Tipo de Precio</label>
+        <select id="modoPrecio" onchange="cambiarEtiquetaPrecio()">
+          <option value="unitario">Precio por Unidad</option>
+          <option value="total">Precio Total (Factura)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label id="labelMonto">Monto ($)</label>
+        <input type="number" id="valor" class="highlight-input" placeholder="0.00" min="0">
+      </div>
+      <div class="field full-width">
+        <label>Descripción</label>
+        <textarea id="descripcion" placeholder="Observaciones adicionales..."></textarea>
+      </div>
+      <div class="field full-width">
+        <label>Adjuntar Factura / Foto</label>
+        <div class="adjunto-wrap">
+          <label class="btn-clip" for="archivoAdjunto">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+            </svg>
+            <span id="adjuntoLabel">Adjuntar archivo</span>
+          </label>
+          <input type="file" id="archivoAdjunto" accept="image/*,.pdf" onchange="mostrarNombreArchivo()" style="display:none">
+          <button type="button" id="btnQuitarAdjunto" class="btn-quitar-adjunto hidden" onclick="quitarAdjunto()">✕</button>
         </div>
-        <button class="btn btn-register" onclick="agregarDato()">✔ Registrar Pieza</button>
+        <div id="previewAdjunto" class="preview-adjunto hidden"></div>
+      </div>
     </div>
+    <button class="btn btn-register" onclick="agregarDato()">✔ Registrar Pieza</button>
+  </div>
 
-    <!-- ── HISTORIAL ─────────────────────────────────── -->
-    <div id="tab-historial" class="tab-content hidden">
-        <p class="section-title">Últimos registros</p>
-        <div class="leyenda-estados">
-            <span class="leyenda-item" style="background:#fcebeb;color:#791f1f;">● Pendiente</span>
-            <span class="leyenda-item" style="background:#faeeda;color:#854f0b;">● Habilitado</span>
-            <span class="leyenda-item" style="background:#eaf3de;color:#27500a;">● Pagado</span>
-        </div>
-        <p class="hint-click">Hacé clic en un registro para ver el detalle completo</p>
-        <div id="historialList" class="historial-list"></div>
+  <!-- HISTORIAL -->
+  <div id="tab-historial" class="tab-content hidden">
+    <p class="section-title">Últimos registros</p>
+    <div class="leyenda-estados">
+      <span class="leyenda-item" style="background:#fcebeb;color:#791f1f;">● Pendiente</span>
+      <span class="leyenda-item" style="background:#faeeda;color:#854f0b;">● Habilitado</span>
+      <span class="leyenda-item" style="background:#eaf3de;color:#27500a;">● Pagado</span>
     </div>
+    <p class="hint-click">Tocá un registro para ver el detalle completo</p>
+    <div id="historialList" class="historial-list"></div>
+  </div>
 
-    <!-- ── PAGOS ─────────────────────────────────────── -->
-    <div id="tab-pagos" class="tab-content hidden">
-        <p class="section-title">Estado de pagos</p>
-        <div id="pagosResumen" class="pagos-resumen"></div>
-        <div class="pagos-filtros">
-            <button class="filtro-btn active" data-filtro="todos"       onclick="renderPagos('todos')">Todos</button>
-            <button class="filtro-btn"        data-filtro="pendientes"  onclick="renderPagos('pendientes')">Pendientes</button>
-            <button class="filtro-btn"        data-filtro="habilitados" onclick="renderPagos('habilitados')">Habilitados</button>
-            <button class="filtro-btn"        data-filtro="pagados"     onclick="renderPagos('pagados')">Pagados</button>
-        </div>
-        <p class="hint-click">Hacé clic en un registro para ver el detalle completo</p>
-        <div id="pagosList" class="pagos-list"></div>
+  <!-- PAGOS -->
+  <div id="tab-pagos" class="tab-content hidden">
+    <p class="section-title">Estado de pagos</p>
+    <div id="pagosResumen" class="pagos-resumen"></div>
+    <div class="pagos-filtros">
+      <button class="filtro-btn active" data-filtro="todos"       onclick="renderPagos('todos')">Todos</button>
+      <button class="filtro-btn"        data-filtro="pendientes"  onclick="renderPagos('pendientes')">Pendientes</button>
+      <button class="filtro-btn"        data-filtro="habilitados" onclick="renderPagos('habilitados')">Habilitados</button>
+      <button class="filtro-btn"        data-filtro="pagados"     onclick="renderPagos('pagados')">Pagados</button>
     </div>
+    <p class="hint-click">Tocá un registro para ver el detalle completo</p>
+    <div id="pagosList" class="pagos-list"></div>
+  </div>
 
-    <!-- ── ADMINISTRACIÓN ────────────────────────────── -->
-    <div id="tab-admin" class="tab-content hidden">
-        <p class="section-title">Herramientas</p>
-        <div class="admin-actions">
-            <button class="btn btn-excel"  onclick="exportarExcel()">⬇ Descargar Excel</button>
-            <button class="btn btn-danger" onclick="limpiarTodo()">✕ Borrar Historial</button>
-        </div>
-        <p class="section-title">Inversión registrada</p>
-        <div class="chart-wrapper">
-            <canvas id="miGrafica"></canvas>
-        </div>
-        <p class="section-title">Comparativa mensual</p>
-        <div id="statsGrid" class="stats-grid"></div>
+  <!-- ADMIN -->
+  <div id="tab-admin" class="tab-content hidden">
+    <p class="section-title">Herramientas</p>
+    <div class="admin-actions">
+      <button class="btn btn-excel"  onclick="exportarExcel()">⬇ Descargar Excel</button>
+      <button class="btn btn-danger" onclick="limpiarTodo()">✕ Borrar Historial</button>
     </div>
+    <p class="section-title">Inversión registrada</p>
+    <div class="chart-wrapper"><canvas id="miGrafica"></canvas></div>
+    <p class="section-title">Comparativa mensual</p>
+    <div id="statsGrid" class="stats-grid"></div>
+  </div>
 
 </div>
 
-<script type="module" src="script.js"></script>
+<script>
+/* ════════════════════════════════════════════════════════
+   FIREBASE INIT (compat SDK — sin import/export)
+   ════════════════════════════════════════════════════════ */
+const firebaseConfig = {
+  apiKey:            "AIzaSyD6uhwhiF-_j5oyu4NBZug3zU7SHwaY4_M",
+  authDomain:        "gastos-mtto.firebaseapp.com",
+  projectId:         "gastos-mtto",
+  storageBucket:     "gastos-mtto.firebasestorage.app",
+  messagingSenderId: "699211889893",
+  appId:             "1:699211889893:web:d2a7b9aa684285339ea80c"
+};
+firebase.initializeApp(firebaseConfig);
+const db      = firebase.firestore();
+const storage = firebase.storage();
+const COL     = "inventario";
+
+/* ════════════════════════════════════════════════════════
+   ESTADO GLOBAL
+   ════════════════════════════════════════════════════════ */
+let inventario   = [];
+let userActual   = null;
+let miGrafica    = null;
+let unsubscribe  = null;
+let filtroActual = 'todos';
+
+/* ════════════════════════════════════════════════════════
+   HELPERS
+   ════════════════════════════════════════════════════════ */
+function estadoPagoInfo(ep) {
+  if (ep === 'habilitado') return { label:'Habilitado', color:'#854f0b', bg:'#faeeda' };
+  if (ep === 'pagado')     return { label:'Pagado',     color:'#27500a', bg:'#eaf3de' };
+  return                          { label:'Pendiente',  color:'#791f1f', bg:'#fcebeb' };
+}
+function puedeEliminar()     { return ['guillermo','romero','admin'].includes(userActual); }
+function puedeHabilitar()    { return ['romero','admin'].includes(userActual); }
+function puedeMarcarPagado() { return ['romero','admin','oficina'].includes(userActual); }
+function puedeEditar()       { return ['romero','admin'].includes(userActual); }
+
+function proyBadge(r) {
+  if (!r.Proyecto) return '';
+  return `<span class="proyecto-badge proyecto-${r.Proyecto.toLowerCase()}">${r.Proyecto}</span>`;
+}
+function adjuntoLinkHTML(r) {
+  if (!r.AdjuntoURL) return '';
+  const pdf = r.AdjuntoTipo === 'application/pdf' || (r.AdjuntoNombre||'').toLowerCase().endsWith('.pdf');
+  if (pdf) return `<a href="${r.AdjuntoURL}" target="_blank" class="adjunto-link adjunto-pdf" onclick="event.stopPropagation()">
+      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      PDF</a>`;
+  return `<a href="${r.AdjuntoURL}" target="_blank" class="adjunto-link adjunto-img" onclick="event.stopPropagation()">
+      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      Foto</a>`;
+}
+
+/* ════════════════════════════════════════════════════════
+   LOGIN / LOGOUT
+   ════════════════════════════════════════════════════════ */
+const CLAVES = { guillermo:'Guillermo123456', romero:'Romero.2026', admin:'Admin.2026', oficina:'Oficina.2026' };
+
+function login() {
+  const user = document.getElementById('userSelect').value;
+  const pass = document.getElementById('passInput').value;
+  if (pass !== CLAVES[user]) { alert('Contraseña incorrecta.'); return; }
+  userActual = user;
+
+  document.getElementById('loginSection').classList.add('hidden');
+  document.getElementById('mainSection').classList.remove('hidden');
+
+  const nombres   = { guillermo:'Guillermo', romero:'Romero', admin:'Administrador', oficina:'Oficina' };
+  const colores   = { guillermo:'#c8860a',   romero:'#533ab7', admin:'#7a4a20',      oficina:'#1a6080' };
+  const etiquetas = { guillermo:'Carga',     romero:'Supervisor', admin:'Acceso Total', oficina:'Pagos' };
+
+  document.getElementById('welcomeText').innerText = 'Hola, ' + nombres[user];
+  const badge = document.getElementById('badge');
+  badge.innerText = etiquetas[user];
+  badge.style.backgroundColor = colores[user];
+
+  document.querySelectorAll('.tab-btn').forEach(t => t.classList.add('hidden'));
+  document.querySelectorAll('.tab-content').forEach(t => { t.classList.remove('active'); t.classList.add('hidden'); });
+
+  const tabsPorRol = {
+    guillermo: ['tab-carga','tab-historial'],
+    romero:    ['tab-carga','tab-historial','tab-pagos'],
+    admin:     ['tab-carga','tab-historial','tab-pagos','tab-admin'],
+    oficina:   ['tab-pagos']
+  };
+  tabsPorRol[user].forEach(id => document.querySelector(`[data-tab="${id}"]`).classList.remove('hidden'));
+  activarTab(user === 'oficina' ? 'tab-pagos' : 'tab-carga');
+  suscribirFirestore();
+}
+
+function logout() {
+  if (unsubscribe) unsubscribe();
+  location.reload();
+}
+
+function activarTab(id) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => { c.classList.remove('active'); c.classList.add('hidden'); });
+  document.querySelector(`[data-tab="${id}"]`)?.classList.add('active');
+  const c = document.getElementById(id);
+  if (c) { c.classList.remove('hidden'); c.classList.add('active'); }
+  if (id === 'tab-historial') renderHistorial();
+  if (id === 'tab-pagos')    renderPagos(filtroActual);
+  if (id === 'tab-admin')    { setTimeout(initChart, 100); actualizarComparador(); }
+}
+
+/* ════════════════════════════════════════════════════════
+   FIRESTORE TIEMPO REAL
+   ════════════════════════════════════════════════════════ */
+function suscribirFirestore() {
+  const q = db.collection(COL).orderBy('timestamp', 'asc');
+  unsubscribe = q.onSnapshot(
+    snap => {
+      inventario = snap.docs.map(d => ({ firestoreId: d.id, ...d.data() }));
+      refrescarVistas();
+    },
+    err => {
+      console.error('Firestore error:', err);
+      alert('Error de conexión: ' + err.message);
+    }
+  );
+}
+
+function refrescarVistas() {
+  const a = document.querySelector('.tab-content.active');
+  if (!a) return;
+  if (a.id === 'tab-historial') renderHistorial();
+  if (a.id === 'tab-pagos')    renderPagos(filtroActual);
+  if (a.id === 'tab-admin')    { setTimeout(initChart, 100); actualizarComparador(); }
+}
+
+/* ════════════════════════════════════════════════════════
+   REGISTRAR PIEZA
+   ════════════════════════════════════════════════════════ */
+async function agregarDato() {
+  const nombre = document.getElementById('nombrePieza').value.trim();
+  const cant   = parseInt(document.getElementById('cantidad').value)  || 0;
+  const monto  = parseFloat(document.getElementById('valor').value)   || 0;
+  const modo   = document.getElementById('modoPrecio').value;
+
+  if (!nombre)    { alert('Ingresá el nombre de la pieza.');   return; }
+  if (cant  <= 0) { alert('La cantidad debe ser mayor a 0.');  return; }
+  if (monto <= 0) { alert('El monto debe ser mayor a 0.');     return; }
+
+  let precioUnitario, precioTotal;
+  if (modo === 'unitario') { precioUnitario = monto; precioTotal = monto * cant; }
+  else                     { precioTotal = monto; precioUnitario = monto / cant; }
+
+  const ahora = new Date();
+
+  // Adjunto opcional
+  let adjuntoURL = '', adjuntoNombre = '', adjuntoTipo = '';
+  const fileInput = document.getElementById('archivoAdjunto');
+  const file = fileInput && fileInput.files[0];
+  if (file) {
+    try {
+      const ext  = file.name.split('.').pop();
+      const path = `adjuntos/${ahora.getTime()}_${nombre.replace(/\s+/g,'_')}.${ext}`;
+      const snap = await storage.ref(path).put(file);
+      adjuntoURL    = await snap.ref.getDownloadURL();
+      adjuntoNombre = file.name;
+      adjuntoTipo   = file.type;
+    } catch(e) {
+      console.warn('Adjunto no subido:', e.message);
+    }
+  }
+
+  const reg = {
+    timestamp:     ahora.getTime(),
+    Mes:           ahora.toLocaleString('es-ES', { month:'long' }),
+    Fecha:         ahora.toLocaleDateString('es-AR'),
+    Hora:          ahora.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }),
+    Usuario:       userActual,
+    Pieza:         nombre,
+    Codigo:        document.getElementById('codigoPieza').value.trim(),
+    Factura:       document.getElementById('numFactura').value.trim(),
+    Proyecto:      document.getElementById('proyectoPieza').value,
+    Estado:        document.getElementById('tipoPieza').value,
+    Cantidad:      cant,
+    Precio_Unit:   precioUnitario.toFixed(2),
+    Total:         precioTotal.toFixed(2),
+    Modo_Ingreso:  modo,
+    Descripcion:   document.getElementById('descripcion').value.trim(),
+    EstadoPago:    'pendiente',
+    AdjuntoURL:    adjuntoURL,
+    AdjuntoNombre: adjuntoNombre,
+    AdjuntoTipo:   adjuntoTipo
+  };
+
+  try {
+    await db.collection(COL).add(reg);
+    alert('¡Registro exitoso!');
+    ['nombrePieza','codigoPieza','numFactura','valor','descripcion'].forEach(id => { document.getElementById(id).value = ''; });
+    document.getElementById('cantidad').value = '1';
+    quitarAdjunto();
+  } catch(e) {
+    console.error('Error al guardar:', e);
+    alert('Error al guardar: ' + e.message);
+  }
+}
+
+/* ════════════════════════════════════════════════════════
+   ADJUNTO UI
+   ════════════════════════════════════════════════════════ */
+function mostrarNombreArchivo() {
+  const input = document.getElementById('archivoAdjunto');
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  document.getElementById('adjuntoLabel').textContent = file.name;
+  document.getElementById('btnQuitarAdjunto').classList.remove('hidden');
+  const preview = document.getElementById('previewAdjunto');
+  preview.classList.remove('hidden');
+  preview.innerHTML = '';
+  if (file.type.startsWith('image/')) {
+    preview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="preview" class="preview-img">`;
+  } else if (file.type === 'application/pdf') {
+    preview.innerHTML = `<div class="preview-pdf">
+      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#c8420a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+      </svg><span>${file.name}</span></div>`;
+  }
+}
+
+function quitarAdjunto() {
+  const i = document.getElementById('archivoAdjunto'); if (i) i.value = '';
+  const l = document.getElementById('adjuntoLabel');   if (l) l.textContent = 'Adjuntar archivo';
+  document.getElementById('btnQuitarAdjunto')?.classList.add('hidden');
+  const p = document.getElementById('previewAdjunto');
+  if (p) { p.classList.add('hidden'); p.innerHTML = ''; }
+}
+
+function cambiarEtiquetaPrecio() {
+  document.getElementById('labelMonto').innerText =
+    document.getElementById('modoPrecio').value === 'unitario' ? 'Precio por Unidad ($)' : 'Precio Total de Factura ($)';
+}
+
+/* ════════════════════════════════════════════════════════
+   MODAL
+   ════════════════════════════════════════════════════════ */
+function abrirDetalle(firestoreId) {
+  const r = inventario.find(x => x.firestoreId === firestoreId);
+  if (!r) return;
+  renderModalVer(r);
+  document.getElementById('modalOverlay').classList.add('modal-open');
+  document.body.style.overflow = 'hidden';
+}
+function cerrarModal() {
+  document.getElementById('modalOverlay').classList.remove('modal-open');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarModal(); });
+
+function renderModalVer(r) {
+  const ep   = r.EstadoPago || 'pendiente';
+  const info = estadoPagoInfo(ep);
+  const pb   = r.Proyecto ? `<span class="proyecto-badge proyecto-${r.Proyecto.toLowerCase()}" style="font-size:12px;padding:3px 10px;">${r.Proyecto}</span>` : '';
+
+  let adjBlock = '';
+  if (r.AdjuntoURL) {
+    const pdf = r.AdjuntoTipo === 'application/pdf' || (r.AdjuntoNombre||'').toLowerCase().endsWith('.pdf');
+    adjBlock = pdf
+      ? `<div class="modal-adjunto-wrap">
+           <a href="${r.AdjuntoURL}" target="_blank" class="modal-adjunto-btn adjunto-pdf">
+             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+             Ver PDF · ${r.AdjuntoNombre || 'Adjunto'}
+           </a>
+         </div>`
+      : `<div class="modal-adjunto-wrap">
+           <a href="${r.AdjuntoURL}" target="_blank"><img src="${r.AdjuntoURL}" alt="Adjunto" class="modal-adjunto-img"></a>
+           <p class="modal-adjunto-label">${r.AdjuntoNombre || 'Ver imagen'}</p>
+         </div>`;
+  }
+
+  // Botones: eliminar + editar según rol
+  let btns = '';
+  if (puedeEliminar()) btns += `<button class="btn btn-danger modal-btn-sm" onclick="eliminarDesdeModal('${r.firestoreId}')">✕ Eliminar</button>`;
+  if (puedeEditar())   btns += `<button class="btn btn-edit modal-btn-sm"   onclick="renderModalEditar('${r.firestoreId}')">✎ Editar</button>`;
+
+  document.getElementById('modalContent').innerHTML = `
+    <div class="modal-header">
+      <div class="modal-header-left">
+        <span class="estado-pill" style="background:${info.bg};color:${info.color};">${info.label}</span>${pb}
+      </div>
+      <button class="modal-close" onclick="cerrarModal()">✕</button>
+    </div>
+    <h2 class="modal-titulo">${r.Pieza}</h2>
+    <div class="modal-total">$${parseFloat(r.Total).toLocaleString('es-AR',{minimumFractionDigits:2})}</div>
+    <div class="modal-grid">
+      <div class="modal-field"><span class="modal-label">Código</span><span class="modal-value">${r.Codigo||'—'}</span></div>
+      <div class="modal-field"><span class="modal-label">N° Factura</span><span class="modal-value">${r.Factura||'—'}</span></div>
+      <div class="modal-field"><span class="modal-label">Estado pieza</span><span class="modal-value">${r.Estado||'—'}</span></div>
+      <div class="modal-field"><span class="modal-label">Proyecto</span><span class="modal-value">${r.Proyecto||'—'}</span></div>
+      <div class="modal-field"><span class="modal-label">Cantidad</span><span class="modal-value">${r.Cantidad}</span></div>
+      <div class="modal-field"><span class="modal-label">Precio unitario</span><span class="modal-value">$${parseFloat(r.Precio_Unit||0).toLocaleString('es-AR',{minimumFractionDigits:2})}</span></div>
+      <div class="modal-field"><span class="modal-label">Fecha</span><span class="modal-value">${r.Fecha} ${r.Hora}</span></div>
+      <div class="modal-field"><span class="modal-label">Registrado por</span><span class="modal-value">${r.Usuario}</span></div>
+    </div>
+    ${r.Descripcion ? `<div class="modal-desc-wrap"><span class="modal-label">Descripción</span><p class="modal-desc">${r.Descripcion}</p></div>` : ''}
+    ${adjBlock}
+    ${btns ? `<div class="modal-acciones">${btns}</div>` : ''}
+  `;
+}
+
+function renderModalEditar(firestoreId) {
+  const r = inventario.find(x => x.firestoreId === firestoreId);
+  if (!r) return;
+  document.getElementById('modalContent').innerHTML = `
+    <div class="modal-header">
+      <span style="font-family:'Lora',serif;font-size:15px;color:var(--brown-mid);font-weight:600;">Editar registro</span>
+      <button class="modal-close" onclick="cerrarModal()">✕</button>
+    </div>
+    <div class="modal-edit-grid">
+      <div class="field"><label>Nombre Pieza</label><input type="text" id="e-pieza" value="${r.Pieza||''}"></div>
+      <div class="field"><label>Código</label><input type="text" id="e-codigo" value="${r.Codigo||''}"></div>
+      <div class="field"><label>N° Factura</label><input type="text" id="e-factura" value="${r.Factura||''}"></div>
+      <div class="field"><label>Proyecto</label>
+        <select id="e-proyecto">
+          <option value="Nuevo"    ${(r.Proyecto||'')==='Nuevo'    ?'selected':''}>Nuevo</option>
+          <option value="Repuesto" ${(r.Proyecto||'')==='Repuesto' ?'selected':''}>Repuesto</option>
+        </select>
+      </div>
+      <div class="field"><label>Estado pieza</label>
+        <select id="e-estado">
+          <option value="Nueva" ${(r.Estado||'')==='Nueva'?'selected':''}>Nueva</option>
+          <option value="Usada" ${(r.Estado||'')==='Usada'?'selected':''}>Usada</option>
+        </select>
+      </div>
+      <div class="field"><label>Cantidad</label><input type="number" id="e-cantidad" value="${r.Cantidad||1}" min="1"></div>
+      <div class="field"><label>Precio Unitario ($)</label><input type="number" id="e-punit" value="${parseFloat(r.Precio_Unit)||0}" min="0" class="highlight-input"></div>
+      <div class="field" style="grid-column:1/-1;"><label>Descripción</label><textarea id="e-desc">${r.Descripcion||''}</textarea></div>
+    </div>
+    <div class="modal-acciones">
+      <button class="btn btn-logout modal-btn-sm" onclick="abrirDetalle('${firestoreId}')">← Cancelar</button>
+      <button class="btn btn-register modal-btn-sm" onclick="guardarEdicion('${firestoreId}')">✔ Guardar cambios</button>
+    </div>
+  `;
+}
+
+async function guardarEdicion(firestoreId) {
+  const cant  = parseInt(document.getElementById('e-cantidad').value) || 1;
+  const punit = parseFloat(document.getElementById('e-punit').value)  || 0;
+  const pieza = document.getElementById('e-pieza').value.trim();
+  if (!pieza) { alert('El nombre de la pieza es obligatorio.'); return; }
+  const cambios = {
+    Pieza:       pieza,
+    Codigo:      document.getElementById('e-codigo').value.trim(),
+    Factura:     document.getElementById('e-factura').value.trim(),
+    Proyecto:    document.getElementById('e-proyecto').value,
+    Estado:      document.getElementById('e-estado').value,
+    Cantidad:    cant,
+    Precio_Unit: punit.toFixed(2),
+    Total:       (punit * cant).toFixed(2),
+    Descripcion: document.getElementById('e-desc').value.trim(),
+  };
+  try {
+    await db.collection(COL).doc(firestoreId).update(cambios);
+    // actualizar local y volver a modo ver sin esperar el snapshot
+    const idx = inventario.findIndex(x => x.firestoreId === firestoreId);
+    if (idx !== -1) inventario[idx] = { ...inventario[idx], ...cambios };
+    renderModalVer(inventario.find(x => x.firestoreId === firestoreId));
+  } catch(e) {
+    alert('Error al guardar: ' + e.message);
+  }
+}
+
+async function eliminarDesdeModal(firestoreId) {
+  if (!puedeEliminar()) return;
+  if (!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
+  try { await db.collection(COL).doc(firestoreId).delete(); cerrarModal(); }
+  catch(e) { alert('Error al eliminar: ' + e.message); }
+}
+
+/* ════════════════════════════════════════════════════════
+   ELIMINAR DESDE LISTA
+   ════════════════════════════════════════════════════════ */
+async function eliminarRegistro(firestoreId) {
+  if (!puedeEliminar()) return;
+  if (!confirm('¿Eliminar este registro?')) return;
+  try { await db.collection(COL).doc(firestoreId).delete(); }
+  catch(e) { alert('Error: ' + e.message); }
+}
+async function eliminarPago(firestoreId) {
+  if (!puedeEliminar()) return;
+  if (!confirm('¿Eliminar este pedido?')) return;
+  try { await db.collection(COL).doc(firestoreId).delete(); }
+  catch(e) { alert('Error: ' + e.message); }
+}
+
+/* ════════════════════════════════════════════════════════
+   HISTORIAL
+   ════════════════════════════════════════════════════════ */
+function renderHistorial() {
+  const lista = document.getElementById('historialList');
+  if (!lista) return;
+  const items = (['admin','romero'].includes(userActual))
+    ? [...inventario].reverse()
+    : [...inventario].filter(r => r.Usuario === 'guillermo').reverse();
+  if (!items.length) { lista.innerHTML = '<p class="historial-empty">No hay registros todavía.</p>'; return; }
+  lista.innerHTML = items.slice(0,50).map(r => {
+    const ep = r.EstadoPago || 'pendiente';
+    const info = estadoPagoInfo(ep);
+    const btnE = puedeEliminar() ? `<button class="btn-eliminar" onclick="event.stopPropagation();eliminarRegistro('${r.firestoreId}')" title="Eliminar">✕</button>` : '';
+    return `
+    <div class="historial-item clickable-row" onclick="abrirDetalle('${r.firestoreId}')">
+      <div class="estado-barra" style="background:${info.color}"></div>
+      <div class="historial-info">
+        <div class="historial-nombre">${r.Pieza} ${proyBadge(r)}</div>
+        <div class="historial-meta">${r.Estado} · Cant: ${r.Cantidad}${r.Factura?' · Fac: '+r.Factura:''}${r.Codigo?' · Cód: '+r.Codigo:''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+        <div style="text-align:right;">
+          <div class="historial-total">$${parseFloat(r.Total).toLocaleString('es-AR')}</div>
+          <div class="historial-fecha">${r.Fecha} ${r.Hora}</div>
+          <span class="estado-pill" style="background:${info.bg};color:${info.color};">${info.label}</span>
+          ${adjuntoLinkHTML(r)}
+        </div>
+        ${btnE}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ════════════════════════════════════════════════════════
+   PAGOS
+   ════════════════════════════════════════════════════════ */
+function renderPagos(filtro) {
+  filtroActual = filtro;
+  document.querySelectorAll('.filtro-btn').forEach(b => b.classList.toggle('active', b.dataset.filtro === filtro));
+  const lista = document.getElementById('pagosList');
+  const resumen = document.getElementById('pagosResumen');
+  if (!lista) return;
+
+  const suma = e => inventario.filter(r => (r.EstadoPago||'pendiente') === e).reduce((a,r) => a + parseFloat(r.Total), 0);
+  if (resumen) resumen.innerHTML = `
+    <div class="resumen-card"><div class="resumen-label">Total</div><div class="resumen-valor">${inventario.length}</div></div>
+    <div class="resumen-card" style="background:#fcebeb;border-color:#f09595;">
+      <div class="resumen-label" style="color:#791f1f;">Pendiente</div>
+      <div class="resumen-valor" style="color:#791f1f;">$${suma('pendiente').toLocaleString('es-AR',{maximumFractionDigits:0})}</div>
+    </div>
+    <div class="resumen-card" style="background:#faeeda;border-color:#ef9f27;">
+      <div class="resumen-label" style="color:#854f0b;">Habilitado</div>
+      <div class="resumen-valor" style="color:#854f0b;">$${suma('habilitado').toLocaleString('es-AR',{maximumFractionDigits:0})}</div>
+    </div>
+    <div class="resumen-card" style="background:#eaf3de;border-color:#97c459;">
+      <div class="resumen-label" style="color:#27500a;">Pagado</div>
+      <div class="resumen-valor" style="color:#27500a;">$${suma('pagado').toLocaleString('es-AR',{maximumFractionDigits:0})}</div>
+    </div>`;
+
+  let items = [...inventario].reverse();
+  if (filtro === 'pendientes')  items = items.filter(r => (r.EstadoPago||'pendiente') === 'pendiente');
+  if (filtro === 'habilitados') items = items.filter(r => (r.EstadoPago||'pendiente') === 'habilitado');
+  if (filtro === 'pagados')     items = items.filter(r => (r.EstadoPago||'pendiente') === 'pagado');
+
+  if (!items.length) { lista.innerHTML = '<p class="pagos-empty">No hay registros en esta categoría.</p>'; return; }
+
+  lista.innerHTML = items.map(r => {
+    const ep = r.EstadoPago || 'pendiente';
+    const info = estadoPagoInfo(ep);
+    let acc = '';
+    if (ep === 'pendiente'  && puedeHabilitar())    acc += `<button class="pago-toggle" onclick="event.stopPropagation();cambiarEstado('${r.firestoreId}','habilitado')" style="border-color:#ef9f27;color:#854f0b;">Habilitar</button>`;
+    if (ep === 'habilitado' && puedeMarcarPagado())  acc += `<button class="pago-toggle" onclick="event.stopPropagation();cambiarEstado('${r.firestoreId}','pagado')" style="border-color:#639922;color:#27500a;">Marcar pagado</button>`;
+    if (ep === 'pagado'     && puedeHabilitar())    acc += `<button class="pago-toggle" onclick="event.stopPropagation();cambiarEstado('${r.firestoreId}','habilitado')" style="border-color:#ef9f27;color:#854f0b;font-size:11px;">Revertir</button>`;
+    const btnE = puedeEliminar() ? `<button class="btn-eliminar" onclick="event.stopPropagation();eliminarPago('${r.firestoreId}')">✕</button>` : '';
+    return `
+    <div class="pago-item clickable-row" style="border-left:4px solid ${info.color};padding-left:14px;" onclick="abrirDetalle('${r.firestoreId}')">
+      <div class="pago-info">
+        <div class="pago-nombre">${r.Pieza} ${proyBadge(r)}</div>
+        <div class="pago-meta">${r.Fecha} · ${r.Estado} · Cant: ${r.Cantidad}${r.Factura?' · Fac: '+r.Factura:''}</div>
+      </div>
+      <div class="pago-right">
+        <div>
+          <div class="pago-total">$${parseFloat(r.Total).toLocaleString('es-AR')}</div>
+          <span class="estado-pill" style="background:${info.bg};color:${info.color};">${info.label}</span>
+          ${adjuntoLinkHTML(r)}
+        </div>
+        ${acc}${btnE}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function cambiarEstado(firestoreId, nuevoEstado) {
+  if (nuevoEstado === 'habilitado' && !puedeHabilitar()) return;
+  if (nuevoEstado === 'pagado'     && !puedeMarcarPagado()) return;
+  const r = inventario.find(x => x.firestoreId === firestoreId);
+  if (!r) return;
+  if (nuevoEstado === 'pagado' && (r.EstadoPago||'pendiente') !== 'habilitado') { alert('Solo se pueden pagar pedidos habilitados.'); return; }
+  try { await db.collection(COL).doc(firestoreId).update({ EstadoPago: nuevoEstado }); }
+  catch(e) { alert('Error: ' + e.message); }
+}
+
+/* ════════════════════════════════════════════════════════
+   GRÁFICA
+   ════════════════════════════════════════════════════════ */
+function initChart() {
+  const ctx = document.getElementById('miGrafica');
+  if (!ctx) return;
+  if (miGrafica) miGrafica.destroy();
+  miGrafica = new Chart(ctx.getContext('2d'), {
+    type:'line',
+    data:{
+      labels: inventario.map(d => d.Fecha+' '+d.Hora),
+      datasets:[{ label:'Inversión ($)', data: inventario.map(d => parseFloat(d.Total)),
+        borderColor:'#c8860a', backgroundColor:'rgba(200,134,10,0.10)',
+        pointBackgroundColor:'#c8420a', pointBorderColor:'#fff', pointBorderWidth:2, pointRadius:5, fill:true, tension:0.4 }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ color:'#7a4a20', font:{ family:'Nunito', weight:'700', size:13 } } } },
+      scales:{
+        x:{ ticks:{ color:'#a07840', font:{ family:'Nunito', size:11 } }, grid:{ color:'rgba(200,160,90,0.12)' } },
+        y:{ ticks:{ color:'#a07840', font:{ family:'Nunito', size:11 } }, grid:{ color:'rgba(200,160,90,0.12)' } }
+      }
+    }
+  });
+}
+
+function actualizarComparador() {
+  const grid = document.getElementById('statsGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  const tot = inventario.reduce((acc,r) => { acc[r.Mes] = (acc[r.Mes]||0) + parseFloat(r.Total); return acc; }, {});
+  for (const [mes,d] of Object.entries(tot)) {
+    grid.innerHTML += `<div class="stat-card"><div class="stat-month">${mes}</div><div class="stat-value">$${d.toLocaleString('es-AR',{maximumFractionDigits:0})}</div></div>`;
+  }
+}
+
+/* ════════════════════════════════════════════════════════
+   EXCEL + LIMPIAR
+   ════════════════════════════════════════════════════════ */
+function exportarExcel() {
+  if (!inventario.length) { alert('No hay registros para exportar.'); return; }
+  const wb = XLSX.utils.book_new();
+  [...new Set(inventario.map(r => r.Mes))].forEach(mes => {
+    const datos = inventario.filter(r => r.Mes === mes).map(({ firestoreId, timestamp, ...resto }) => resto);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(datos), mes.toUpperCase());
+  });
+  XLSX.writeFile(wb, 'Inventario_RomeroPanificados.xlsx');
+}
+
+async function limpiarTodo() {
+  if (!confirm('¿Borrar TODO el historial? Esta acción no se puede deshacer.')) return;
+  try {
+    const snap = await db.collection(COL).get();
+    await Promise.all(snap.docs.map(d => d.ref.delete()));
+    alert('Historial borrado.');
+  } catch(e) { alert('Error: ' + e.message); }
+}
+</script>
 </body>
 </html>
