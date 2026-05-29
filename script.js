@@ -60,7 +60,7 @@ function estadoPagoInfo(ep) {
 function puedeEliminar()     { return ['guillermo', 'romero', 'admin'].includes(userActual); }
 function puedeHabilitar()    { return ['romero', 'admin'].includes(userActual); }
 function puedeMarcarPagado() { return ['romero', 'admin', 'oficina'].includes(userActual); }
-function puedeEditar()       { return ['romero', 'admin'].includes(userActual); }
+function puedeEditar()       { return ['romero', 'admin', 'guillermo'].includes(userActual); }
 
 function proyBadge(r) {
   if (!r.Proyecto) return '';
@@ -175,6 +175,48 @@ function refrescarVistas() {
 }
 
 /* ════════════════════════════════════════════════════════
+   COMPRESIÓN DE IMAGEN
+   Reduce imágenes grandes a máx 1200px y calidad 0.75
+   antes de subirlas a Firebase Storage.
+   ════════════════════════════════════════════════════════ */
+function comprimirImagen(file, maxPx = 1200, calidad = 0.75) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+
+      // Escalar si supera maxPx en alguna dimensión
+      if (width > maxPx || height > maxPx) {
+        if (width > height) {
+          height = Math.round((height * maxPx) / width);
+          width  = maxPx;
+        } else {
+          width  = Math.round((width * maxPx) / height);
+          height = maxPx;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width  = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        blob => blob
+          ? resolve(new File([blob], file.name, { type: 'image/jpeg' }))
+          : reject(new Error('No se pudo comprimir la imagen')),
+        'image/jpeg',
+        calidad
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo leer la imagen')); };
+    img.src = url;
+  });
+}
+
+/* ════════════════════════════════════════════════════════
    REGISTRAR PIEZA
    ════════════════════════════════════════════════════════ */
 async function agregarDato() {
@@ -203,11 +245,15 @@ async function agregarDato() {
   const fileInput = document.getElementById('archivoAdjunto');
   const file = fileInput && fileInput.files[0];
   if (file) {
-    mostrarToast('📎 Subiendo adjunto...', 'loading', 0);
+    mostrarToast('📎 Comprimiendo y subiendo adjunto...', 'loading', 0);
     try {
-      const ext  = file.name.split('.').pop();
+      const ext  = file.name.split('.').pop().toLowerCase();
       const path = `adjuntos/${ahora.getTime()}_${nombre.replace(/\s+/g, '_')}.${ext}`;
-      const snap = await storage.ref(path).put(file);
+
+      // Comprimir si es imagen; los PDF se suben tal cual
+      const archivoASubir = file.type.startsWith('image/') ? await comprimirImagen(file) : file;
+
+      const snap = await storage.ref(path).put(archivoASubir);
       adjuntoURL    = await snap.ref.getDownloadURL();
       adjuntoNombre = file.name;
       adjuntoTipo   = file.type;
@@ -597,6 +643,18 @@ function renderPagos(filtro) {
       : '';
     return `
     <div class="pago-item clickable-row" style="border-left:4px solid ${info.color};padding-left:14px;" onclick="abrirDetalle('${r.firestoreId}')">
+      ${r.AdjuntoURL && r.AdjuntoTipo && r.AdjuntoTipo.startsWith('image/')
+        ? `<a href="${r.AdjuntoURL}" target="_blank" class="hist-thumb-wrap" onclick="event.stopPropagation()">
+             <img src="${r.AdjuntoURL}" alt="adjunto" class="hist-thumb">
+           </a>`
+        : r.AdjuntoURL
+          ? `<a href="${r.AdjuntoURL}" target="_blank" class="hist-thumb-wrap hist-thumb-pdf" onclick="event.stopPropagation()" title="${r.AdjuntoNombre || 'PDF'}">
+               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c8420a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                 <polyline points="14 2 14 8 20 8"/>
+               </svg>
+             </a>`
+          : ''}
       <div class="pago-info">
         <div class="pago-nombre">${r.Pieza} ${proyBadge(r)}</div>
         <div class="pago-meta">${r.Fecha} · ${r.Estado} · Cant: ${r.Cantidad}${r.Factura ? ' · Fac: ' + r.Factura : ''}</div>
@@ -605,7 +663,6 @@ function renderPagos(filtro) {
         <div>
           <div class="pago-total">$${parseFloat(r.Total).toLocaleString('es-AR')}</div>
           <span class="estado-pill" style="background:${info.bg};color:${info.color};">${info.label}</span>
-          ${adjuntoLinkHTML(r)}
         </div>
         ${acc}${btnE}
       </div>
