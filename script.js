@@ -35,7 +35,7 @@ function estadoPagoInfo(ep) {
 function puedeEliminar()     { return ['guillermo', 'romero', 'admin'].includes(userActual); }
 function puedeHabilitar()    { return ['romero', 'admin'].includes(userActual); }
 function puedeMarcarPagado() { return ['romero', 'admin', 'oficina'].includes(userActual); }
-function puedeEditar()       { return ['romero', 'admin'].includes(userActual); }
+function puedeEditar()       { return ['romero', 'admin','guillermo'].includes(userActual); }
 
 function proyBadge(r) {
   if (!r.Proyecto) return '';
