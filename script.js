@@ -15,6 +15,31 @@ const storage = firebase.storage();
 const COL     = "inventario";
 
 /* ════════════════════════════════════════════════════════
+   TOAST (mensaje flotante)
+   ════════════════════════════════════════════════════════ */
+let _toastTimer = null;
+function mostrarToast(msg, tipo = 'info', duracion = 3000) {
+  let toast = document.getElementById('appToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'appToast';
+    document.body.appendChild(toast);
+  }
+  toast.className = 'app-toast toast-' + tipo;
+  toast.innerHTML = msg;
+  toast.classList.add('toast-visible');
+  if (_toastTimer) clearTimeout(_toastTimer);
+  if (duracion > 0) {
+    _toastTimer = setTimeout(() => toast.classList.remove('toast-visible'), duracion);
+  }
+}
+function ocultarToast() {
+  const toast = document.getElementById('appToast');
+  if (toast) toast.classList.remove('toast-visible');
+  if (_toastTimer) clearTimeout(_toastTimer);
+}
+
+/* ════════════════════════════════════════════════════════
    ESTADO GLOBAL
    ════════════════════════════════════════════════════════ */
 let inventario   = [];
@@ -35,7 +60,7 @@ function estadoPagoInfo(ep) {
 function puedeEliminar()     { return ['guillermo', 'romero', 'admin'].includes(userActual); }
 function puedeHabilitar()    { return ['romero', 'admin'].includes(userActual); }
 function puedeMarcarPagado() { return ['romero', 'admin', 'oficina'].includes(userActual); }
-function puedeEditar()       { return ['romero', 'admin','guillermo'].includes(userActual); }
+function puedeEditar()       { return ['romero', 'admin'].includes(userActual); }
 
 function proyBadge(r) {
   if (!r.Proyecto) return '';
@@ -178,6 +203,7 @@ async function agregarDato() {
   const fileInput = document.getElementById('archivoAdjunto');
   const file = fileInput && fileInput.files[0];
   if (file) {
+    mostrarToast('📎 Subiendo adjunto...', 'loading', 0);
     try {
       const ext  = file.name.split('.').pop();
       const path = `adjuntos/${ahora.getTime()}_${nombre.replace(/\s+/g, '_')}.${ext}`;
@@ -187,8 +213,11 @@ async function agregarDato() {
       adjuntoTipo   = file.type;
     } catch (e) {
       console.warn('Adjunto no subido:', e.message);
+      mostrarToast('⚠️ El adjunto no se pudo subir, se guardará sin él.', 'warning', 4000);
     }
   }
+
+  mostrarToast('💾 Guardando registro...', 'loading', 0);
 
   const reg = {
     timestamp:     ahora.getTime(),
@@ -214,15 +243,23 @@ async function agregarDato() {
 
   try {
     await db.collection(COL).add(reg);
-    alert('¡Registro exitoso!');
+    mostrarToast('✅ ¡Registro guardado correctamente!', 'success', 3500);
+
+    // ── LIMPIEZA COMPLETA DEL FORMULARIO ──────────────────
     ['nombrePieza', 'codigoPieza', 'numFactura', 'valor', 'descripcion'].forEach(id => {
       document.getElementById(id).value = '';
     });
-    document.getElementById('cantidad').value = '1';
+    document.getElementById('cantidad').value        = '1';
+    document.getElementById('modoPrecio').value      = 'unitario';
+    document.getElementById('proyectoPieza').value   = 'Nuevo';
+    document.getElementById('tipoPieza').value       = 'Nueva';
+    document.getElementById('labelMonto').innerText  = 'Precio por Unidad ($)';
     quitarAdjunto();
+    // ──────────────────────────────────────────────────────
+
   } catch (e) {
     console.error('Error al guardar:', e);
-    alert('Error al guardar: ' + e.message);
+    mostrarToast('❌ Error al guardar: ' + e.message, 'error', 5000);
   }
 }
 
@@ -274,6 +311,13 @@ function abrirDetalle(firestoreId) {
   const r = inventario.find(x => x.firestoreId === firestoreId);
   if (!r) return;
   renderModalVer(r);
+  document.getElementById('modalOverlay').classList.add('modal-open');
+  document.body.style.overflow = 'hidden';
+}
+
+// ── NUEVO: abre el modal directamente en modo edición ──
+function abrirEditar(firestoreId) {
+  renderModalEditar(firestoreId);
   document.getElementById('modalOverlay').classList.add('modal-open');
   document.body.style.overflow = 'hidden';
 }
@@ -453,12 +497,32 @@ function renderHistorial() {
   lista.innerHTML = items.slice(0, 50).map(r => {
     const ep   = r.EstadoPago || 'pendiente';
     const info = estadoPagoInfo(ep);
+
+    // ── Botón eliminar (guillermo / romero / admin) ──
     const btnE = puedeEliminar()
       ? `<button class="btn-eliminar" onclick="event.stopPropagation();eliminarRegistro('${r.firestoreId}')" title="Eliminar">✕</button>`
       : '';
+
+    // ── Botón editar en historial (romero / admin) ──
+    const btnEdit = puedeEditar()
+      ? `<button class="btn-editar-hist" onclick="event.stopPropagation();abrirEditar('${r.firestoreId}')" title="Editar">✎</button>`
+      : '';
+
     return `
     <div class="historial-item clickable-row" onclick="abrirDetalle('${r.firestoreId}')">
       <div class="estado-barra" style="background:${info.color}"></div>
+      ${r.AdjuntoURL && r.AdjuntoTipo && r.AdjuntoTipo.startsWith('image/')
+        ? `<a href="${r.AdjuntoURL}" target="_blank" class="hist-thumb-wrap" onclick="event.stopPropagation()">
+             <img src="${r.AdjuntoURL}" alt="adjunto" class="hist-thumb">
+           </a>`
+        : r.AdjuntoURL
+          ? `<a href="${r.AdjuntoURL}" target="_blank" class="hist-thumb-wrap hist-thumb-pdf" onclick="event.stopPropagation()" title="${r.AdjuntoNombre || 'PDF'}">
+               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c8420a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                 <polyline points="14 2 14 8 20 8"/>
+               </svg>
+             </a>`
+          : ''}
       <div class="historial-info">
         <div class="historial-nombre">${r.Pieza} ${proyBadge(r)}</div>
         <div class="historial-meta">${r.Estado} · Cant: ${r.Cantidad}${r.Factura ? ' · Fac: ' + r.Factura : ''}${r.Codigo ? ' · Cód: ' + r.Codigo : ''}</div>
@@ -468,9 +532,8 @@ function renderHistorial() {
           <div class="historial-total">$${parseFloat(r.Total).toLocaleString('es-AR')}</div>
           <div class="historial-fecha">${r.Fecha} ${r.Hora}</div>
           <span class="estado-pill" style="background:${info.bg};color:${info.color};">${info.label}</span>
-          ${adjuntoLinkHTML(r)}
         </div>
-        ${btnE}
+        ${btnEdit}${btnE}
       </div>
     </div>`;
   }).join('');
