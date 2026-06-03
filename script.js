@@ -10,8 +10,9 @@ const firebaseConfig = {
   appId:             "1:699211889893:web:d2a7b9aa684285339ea80c"
 };
 firebase.initializeApp(firebaseConfig);
-const db  = firebase.firestore();
-const COL = "inventario";
+const db      = firebase.firestore();
+const storage = firebase.storage();
+const COL     = "inventario";
 
 /* ════════════════════════════════════════════════════════
    TOAST (mensaje flotante)
@@ -57,7 +58,7 @@ function estadoPagoInfo(ep) {
 }
 
 function puedeEliminar()     { return ['guillermo', 'romero', 'admin'].includes(userActual); }
-function puedeHabilitar()    { return ['romero', 'admin', 'oficina'].includes(userActual); }
+function puedeHabilitar()    { return ['romero', 'admin'].includes(userActual); }
 function puedeMarcarPagado() { return ['romero', 'admin', 'oficina'].includes(userActual); }
 function puedeEditar()       { return ['romero', 'admin', 'guillermo'].includes(userActual); }
 
@@ -174,26 +175,41 @@ function refrescarVistas() {
 }
 
 /* ════════════════════════════════════════════════════════
-   COMPRESIÓN DE IMAGEN (canvas, sin Storage)
-   Reduce imágenes a máx 1000px y calidad 0.70
-   para que quepan en Firestore (límite ~1MB por doc)
+   COMPRESIÓN DE IMAGEN
+   Reduce imágenes grandes a máx 1200px y calidad 0.75
+   antes de subirlas a Firebase Storage.
    ════════════════════════════════════════════════════════ */
-function comprimirImagenBase64(file, maxPx = 1000, calidad = 0.70) {
+function comprimirImagen(file, maxPx = 1200, calidad = 0.75) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
       URL.revokeObjectURL(url);
       let { width, height } = img;
+
+      // Escalar si supera maxPx en alguna dimensión
       if (width > maxPx || height > maxPx) {
-        if (width > height) { height = Math.round((height * maxPx) / width); width = maxPx; }
-        else                { width = Math.round((width * maxPx) / height);  height = maxPx; }
+        if (width > height) {
+          height = Math.round((height * maxPx) / width);
+          width  = maxPx;
+        } else {
+          width  = Math.round((width * maxPx) / height);
+          height = maxPx;
+        }
       }
+
       const canvas = document.createElement('canvas');
       canvas.width  = width;
       canvas.height = height;
       canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL('image/jpeg', calidad));
+
+      canvas.toBlob(
+        blob => blob
+          ? resolve(new File([blob], file.name, { type: 'image/jpeg' }))
+          : reject(new Error('No se pudo comprimir la imagen')),
+        'image/jpeg',
+        calidad
+      );
     };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo leer la imagen')); };
     img.src = url;
@@ -224,42 +240,26 @@ async function agregarDato() {
 
   const ahora = new Date();
 
-  // ── Adjunto como base64 (sin Firebase Storage) ──────────
+  // Adjunto opcional
   let adjuntoURL = '', adjuntoNombre = '', adjuntoTipo = '';
   const fileInput = document.getElementById('archivoAdjunto');
   const file = fileInput && fileInput.files[0];
-
   if (file) {
-    mostrarToast('📎 Procesando archivo adjunto...', 'loading', 0);
+    mostrarToast('📎 Comprimiendo y subiendo adjunto...', 'loading', 0);
     try {
-      if (file.type.startsWith('image/')) {
-        // Comprimir imagen y convertir a base64
-        adjuntoURL = await comprimirImagenBase64(file);
-      } else if (file.type === 'application/pdf') {
-        // PDF: verificar tamaño máx 700KB
-        if (file.size > 700 * 1024) {
-          mostrarToast('⚠️ El PDF supera 700KB y no puede guardarse. Se omitirá el adjunto.', 'warning', 5000);
-          await new Promise(r => setTimeout(r, 1200));
-          adjuntoURL = '';
-        } else {
-          adjuntoURL = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload  = e => resolve(e.target.result);
-            reader.onerror = () => reject(new Error('Error al leer PDF'));
-            reader.readAsDataURL(file);
-          });
-        }
-      }
-      if (adjuntoURL) {
-        adjuntoNombre = file.name;
-        adjuntoTipo   = file.type;
-        mostrarToast('✓ Archivo procesado', 'loading', 0);
-      }
+      const ext  = file.name.split('.').pop().toLowerCase();
+      const path = `adjuntos/${ahora.getTime()}_${nombre.replace(/\s+/g, '_')}.${ext}`;
+
+      // Comprimir si es imagen; los PDF se suben tal cual
+      const archivoASubir = file.type.startsWith('image/') ? await comprimirImagen(file) : file;
+
+      const snap = await storage.ref(path).put(archivoASubir);
+      adjuntoURL    = await snap.ref.getDownloadURL();
+      adjuntoNombre = file.name;
+      adjuntoTipo   = file.type;
     } catch (e) {
-      console.warn('Adjunto no procesado:', e.message);
-      mostrarToast('⚠️ No se pudo procesar el adjunto, se guardará sin él.', 'warning', 4000);
-      await new Promise(r => setTimeout(r, 1000));
-      adjuntoURL = '';
+      console.warn('Adjunto no subido:', e.message);
+      mostrarToast('⚠️ El adjunto no se pudo subir, se guardará sin él.', 'warning', 4000);
     }
   }
 
@@ -361,6 +361,7 @@ function abrirDetalle(firestoreId) {
   document.body.style.overflow = 'hidden';
 }
 
+// ── NUEVO: abre el modal directamente en modo edición ──
 function abrirEditar(firestoreId) {
   renderModalEditar(firestoreId);
   document.getElementById('modalOverlay').classList.add('modal-open');
@@ -464,6 +465,37 @@ function renderModalEditar(firestoreId) {
         <label>Descripción</label>
         <textarea id="e-desc">${r.Descripcion || ''}</textarea>
       </div>
+      <div class="field" style="grid-column:1/-1;">
+        <label>Archivo adjunto</label>
+        ${r.AdjuntoURL ? `
+          <div class="e-adjunto-actual">
+            ${r.AdjuntoTipo && r.AdjuntoTipo.startsWith('image/')
+              ? `<a href="${r.AdjuntoURL}" target="_blank"><img src="${r.AdjuntoURL}" class="e-adjunto-thumb" alt="adjunto"></a>`
+              : `<a href="${r.AdjuntoURL}" target="_blank" class="e-adjunto-pdf-link">
+                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c8420a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                     <polyline points="14 2 14 8 20 8"/>
+                   </svg>
+                   ${r.AdjuntoNombre || 'Ver PDF'}
+                 </a>`
+            }
+            <button type="button" class="e-adjunto-quitar" onclick="quitarAdjuntoEdicion()">✕ Quitar</button>
+          </div>
+          <p class="e-adjunto-hint">O reemplazalo con uno nuevo:</p>
+        ` : ''}
+        <input type="hidden" id="e-adjunto-accion" value="mantener">
+        <div class="adjunto-wrap" style="margin-top:6px;">
+          <label class="btn-clip" for="e-archivoAdjunto">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+            </svg>
+            <span id="e-adjuntoLabel">${r.AdjuntoURL ? 'Reemplazar archivo' : 'Adjuntar archivo'}</span>
+          </label>
+          <input type="file" id="e-archivoAdjunto" accept="image/*,.pdf" onchange="previewAdjuntoEdicion()" style="display:none">
+          <button type="button" id="e-btnQuitarNuevo" class="btn-quitar-adjunto hidden" onclick="quitarNuevoAdjuntoEdicion()">✕</button>
+        </div>
+        <div id="e-previewAdjunto" class="preview-adjunto hidden"></div>
+      </div>
     </div>
     <div class="modal-acciones">
       <button class="btn btn-logout modal-btn-sm" onclick="abrirDetalle('${firestoreId}')">← Cancelar</button>
@@ -477,6 +509,7 @@ async function guardarEdicion(firestoreId) {
   const punit = parseFloat(document.getElementById('e-punit').value)  || 0;
   const pieza = document.getElementById('e-pieza').value.trim();
   if (!pieza) { alert('El nombre de la pieza es obligatorio.'); return; }
+
   const cambios = {
     Pieza:       pieza,
     Codigo:      document.getElementById('e-codigo').value.trim(),
@@ -488,14 +521,89 @@ async function guardarEdicion(firestoreId) {
     Total:       (punit * cant).toFixed(2),
     Descripcion: document.getElementById('e-desc').value.trim(),
   };
+
+  // ── Manejo de adjunto ──────────────────────────────────
+  const accion    = document.getElementById('e-adjunto-accion')?.value || 'mantener';
+  const fileInput = document.getElementById('e-archivoAdjunto');
+  const nuevoFile = fileInput && fileInput.files[0];
+
+  if (accion === 'quitar') {
+    // El usuario quiere quitar el adjunto actual sin poner uno nuevo
+    cambios.AdjuntoURL    = '';
+    cambios.AdjuntoNombre = '';
+    cambios.AdjuntoTipo   = '';
+  }
+
+  if (nuevoFile) {
+    // Hay un archivo nuevo para subir
+    mostrarToast('📎 Comprimiendo y subiendo adjunto...', 'loading', 0);
+    try {
+      const ext  = nuevoFile.name.split('.').pop().toLowerCase();
+      const path = `adjuntos/${Date.now()}_${pieza.replace(/\s+/g, '_')}.${ext}`;
+      const archivoASubir = nuevoFile.type.startsWith('image/') ? await comprimirImagen(nuevoFile) : nuevoFile;
+      const snap = await storage.ref(path).put(archivoASubir);
+      cambios.AdjuntoURL    = await snap.ref.getDownloadURL();
+      cambios.AdjuntoNombre = nuevoFile.name;
+      cambios.AdjuntoTipo   = nuevoFile.type;
+    } catch (e) {
+      mostrarToast('⚠️ El adjunto no se pudo subir.', 'warning', 4000);
+    }
+  }
+  // ──────────────────────────────────────────────────────
+
+  mostrarToast('💾 Guardando cambios...', 'loading', 0);
   try {
     await db.collection(COL).doc(firestoreId).update(cambios);
     const idx = inventario.findIndex(x => x.firestoreId === firestoreId);
     if (idx !== -1) inventario[idx] = { ...inventario[idx], ...cambios };
+    mostrarToast('✅ Cambios guardados', 'success', 3000);
     renderModalVer(inventario.find(x => x.firestoreId === firestoreId));
   } catch (e) {
-    alert('Error al guardar: ' + e.message);
+    mostrarToast('❌ Error al guardar: ' + e.message, 'error', 5000);
   }
+}
+
+/* ── Helpers adjunto en modal de edición ── */
+function quitarAdjuntoEdicion() {
+  const wrap = document.querySelector('.e-adjunto-actual');
+  const hint = document.querySelector('.e-adjunto-hint');
+  if (wrap) wrap.style.display = 'none';
+  if (hint) hint.style.display = 'none';
+  const accion = document.getElementById('e-adjunto-accion');
+  if (accion) accion.value = 'quitar';
+  const label = document.getElementById('e-adjuntoLabel');
+  if (label) label.textContent = 'Adjuntar archivo';
+}
+
+function previewAdjuntoEdicion() {
+  const input = document.getElementById('e-archivoAdjunto');
+  if (!input || !input.files[0]) return;
+  const file = input.files[0];
+  document.getElementById('e-adjuntoLabel').textContent = file.name;
+  document.getElementById('e-btnQuitarNuevo').classList.remove('hidden');
+  const preview = document.getElementById('e-previewAdjunto');
+  preview.classList.remove('hidden');
+  preview.innerHTML = '';
+  if (file.type.startsWith('image/')) {
+    preview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="preview" class="preview-img">`;
+  } else if (file.type === 'application/pdf') {
+    preview.innerHTML = `<div class="preview-pdf">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c8420a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+      </svg>
+      <span>${file.name}</span>
+    </div>`;
+  }
+}
+
+function quitarNuevoAdjuntoEdicion() {
+  const input = document.getElementById('e-archivoAdjunto');
+  if (input) input.value = '';
+  document.getElementById('e-adjuntoLabel').textContent = 'Adjuntar archivo';
+  document.getElementById('e-btnQuitarNuevo').classList.add('hidden');
+  const preview = document.getElementById('e-previewAdjunto');
+  if (preview) { preview.classList.add('hidden'); preview.innerHTML = ''; }
 }
 
 async function eliminarDesdeModal(firestoreId) {
@@ -543,10 +651,12 @@ function renderHistorial() {
     const ep   = r.EstadoPago || 'pendiente';
     const info = estadoPagoInfo(ep);
 
+    // ── Botón eliminar (guillermo / romero / admin) ──
     const btnE = puedeEliminar()
       ? `<button class="btn-eliminar" onclick="event.stopPropagation();eliminarRegistro('${r.firestoreId}')" title="Eliminar">✕</button>`
       : '';
 
+    // ── Botón editar en historial (romero / admin) ──
     const btnEdit = puedeEditar()
       ? `<button class="btn-editar-hist" onclick="event.stopPropagation();abrirEditar('${r.firestoreId}')" title="Editar">✎</button>`
       : '';
@@ -570,7 +680,7 @@ function renderHistorial() {
         <div class="historial-nombre">${r.Pieza} ${proyBadge(r)}</div>
         <div class="historial-meta">${r.Estado} · Cant: ${r.Cantidad}${r.Factura ? ' · Fac: ' + r.Factura : ''}${r.Codigo ? ' · Cód: ' + r.Codigo : ''}</div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
         <div style="text-align:right;">
           <div class="historial-total">$${parseFloat(r.Total).toLocaleString('es-AR')}</div>
           <div class="historial-fecha">${r.Fecha} ${r.Hora}</div>
@@ -746,7 +856,7 @@ function exportarExcel() {
   [...new Set(inventario.map(r => r.Mes))].forEach(mes => {
     const datos = inventario
       .filter(r => r.Mes === mes)
-      .map(({ firestoreId, timestamp, AdjuntoURL, ...resto }) => resto); // excluir base64 del excel
+      .map(({ firestoreId, timestamp, ...resto }) => resto);
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(datos), mes.toUpperCase());
   });
   XLSX.writeFile(wb, 'Inventario_RomeroPanificados.xlsx');
