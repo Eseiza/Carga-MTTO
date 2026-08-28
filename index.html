@@ -93,6 +93,18 @@
         <input type="text" id="numFactura" placeholder="Ej: 0001-00012345">
       </div>
       <div class="field">
+        <label>Proveedor</label>
+        <input type="text" id="proveedorPieza" placeholder="Ej: Casa Gómez">
+      </div>
+      <div class="field">
+        <label>Domicilio Proveedor</label>
+        <input type="text" id="domicilioProveedor" placeholder="Ej: Juan de la Cruz Contreras 14">
+      </div>
+      <div class="field">
+        <label>Localidad Proveedor</label>
+        <input type="text" id="localidadProveedor" placeholder="Ej: Florencio Varela – Pcia. Buenos Aires">
+      </div>
+      <div class="field">
         <label>Proyecto</label>
         <select id="proyectoPieza">
           <option value="Nuevo">Nuevo</option>
@@ -115,6 +127,13 @@
         <select id="modoPrecio" onchange="cambiarEtiquetaPrecio()">
           <option value="unitario">Precio por Unidad</option>
           <option value="total">Precio Total (Factura)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Moneda</label>
+        <select id="monedaPieza">
+          <option value="ARS">Pesos (ARS)</option>
+          <option value="USD">Dólares (USD)</option>
         </select>
       </div>
       <div class="field">
