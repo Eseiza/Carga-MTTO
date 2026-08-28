@@ -995,6 +995,17 @@ body {
 
 .btn-edit:hover { background: var(--brown); }
 
+.btn-op {
+    background: var(--gold);
+    color: var(--brown);
+    font-family: 'Lora', serif;
+    padding: 9px 18px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.btn-op:hover { background: #b3790a; color: var(--cream); }
+
 .modal-edit-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
