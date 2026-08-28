@@ -912,7 +912,7 @@ async function generarOrdenPago(firestoreId) {
 
   const ep = r.EstadoPago || 'pendiente';
   if (ep !== 'habilitado' && ep !== 'pagado') {
-    alert('Solo se puede generar la Orden de Pago para pedidos habilitados o pagados.');
+    alert('Solo se puede generar la Orden de Compra para pedidos habilitados o pagados.');
     return;
   }
 
@@ -1074,7 +1074,7 @@ async function generarOrdenPago(firestoreId) {
 
   const ventana = window.open('', '_blank');
   if (!ventana) {
-    alert('El navegador bloqueó la ventana emergente. Habilitá los pop-ups para generar la Orden de Pago.');
+    alert('El navegador bloqueó la ventana emergente. Habilitá los pop-ups para generar la Orden de Compra.');
     return;
   }
   ventana.document.write(html);
