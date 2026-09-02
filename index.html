@@ -73,53 +73,48 @@
     <button class="tab-btn hidden" data-tab="tab-carga"     onclick="activarTab('tab-carga')">Registrar</button>
     <button class="tab-btn hidden" data-tab="tab-historial" onclick="activarTab('tab-historial')">Historial</button>
     <button class="tab-btn hidden" data-tab="tab-pagos"     onclick="activarTab('tab-pagos')">Pagos</button>
+    <button class="tab-btn hidden" data-tab="tab-oc"        onclick="activarTab('tab-oc')">Órdenes de Compra</button>
     <button class="tab-btn hidden" data-tab="tab-admin"     onclick="activarTab('tab-admin')">Administración</button>
   </div>
 
   <!-- REGISTRAR -->
   <div id="tab-carga" class="tab-content hidden">
-    <p class="section-title">Nueva pieza</p>
+    <p class="section-title">Nueva pieza / pago</p>
     <div class="form-grid">
-      <div class="field">
-        <label>Nombre Pieza</label>
-        <input type="text" id="nombrePieza" placeholder="Ej: Correa dentada">
+      <div class="field full-width">
+        <label>Metodología de pago</label>
+        <select id="metodologiaPago" onchange="toggleMetodologia()">
+          <option value="estandar">Estándar (pieza / factura única)</option>
+          <option value="personalizado">Personalizado (avances de trabajo a entidad)</option>
+        </select>
+      </div>
+      <div class="field hidden" id="campoNombrePersonalizado">
+        <label>Nombre del trabajo / obra</label>
+        <input type="text" id="nombrePieza" placeholder="Ej: Mantenimiento de horno">
+      </div>
+      <div class="field hidden" id="campoCodigoPersonalizado">
+        <label>Código</label>
+        <input type="text" id="codigoPieza" placeholder="Código interno">
+      </div>
+      <div class="field hidden" id="campoPresupuestoPersonalizado">
+        <label>Presupuesto total acordado</label>
+        <input type="number" id="valor" class="highlight-input" placeholder="0.00" min="0">
+      </div>
+      <div class="field hidden" id="campoProyectoPersonalizado">
+        <label>Proyecto</label>
+        <select id="proyectoPieza"><option value="Nuevo">Nuevo</option><option value="Repuesto">Repuesto</option></select>
+      </div>
+      <div class="field hidden" id="campoEstadoPersonalizado">
+        <label>Estado</label>
+        <select id="tipoPieza"><option value="Nueva">Nueva</option><option value="Usada">Usada</option></select>
       </div>
       <div class="field">
-        <label>Código</label>
-        <input type="text" id="codigoPieza" placeholder="Ej: CD-001">
+        <label id="labelProveedor">Proveedor</label>
+        <input type="text" id="proveedorPieza" placeholder="Ej: Casa Gómez">
       </div>
       <div class="field">
         <label>N° Factura</label>
         <input type="text" id="numFactura" placeholder="Ej: 0001-00012345">
-      </div>
-      <div class="field">
-        <label>Proveedor</label>
-        <input type="text" id="proveedorPieza" placeholder="Ej: Casa Gómez">
-      </div>
-      <div class="field">
-        <label>Proyecto</label>
-        <select id="proyectoPieza">
-          <option value="Nuevo">Nuevo</option>
-          <option value="Repuesto">Repuesto</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Estado</label>
-        <select id="tipoPieza">
-          <option value="Nueva">Nueva</option>
-          <option value="Usada">Usada</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Cantidad</label>
-        <input type="number" id="cantidad" value="1" min="1">
-      </div>
-      <div class="field">
-        <label>Tipo de Precio</label>
-        <select id="modoPrecio" onchange="cambiarEtiquetaPrecio()">
-          <option value="unitario">Precio por Unidad</option>
-          <option value="total">Precio Total (Factura)</option>
-        </select>
       </div>
       <div class="field">
         <label>Moneda</label>
@@ -128,9 +123,43 @@
           <option value="USD">Dólares (USD)</option>
         </select>
       </div>
-      <div class="field">
-        <label id="labelMonto">Monto ($)</label>
-        <input type="number" id="valor" class="highlight-input" placeholder="0.00" min="0">
+      <div class="field" id="campoIVA">
+        <label>IVA</label>
+        <select id="tipoIVA" onchange="toggleIVA()">
+          <option value="con">Con IVA</option>
+          <option value="sin">Sin IVA</option>
+        </select>
+      </div>
+      <div class="field" id="campoIVAPorcentaje">
+        <label>Porcentaje de IVA</label>
+        <input type="number" id="ivaPorcentaje" value="21" min="0" step="0.1">
+      </div>
+
+      <div class="field full-width factura-items-wrap" id="seccionItemsFactura">
+        <div class="factura-items-header">
+          <div>
+            <label style="margin-bottom:3px;">Ítems de la factura</label>
+            <p class="hint-click" style="margin:0;">Cargá todos los productos de esta factura en una sola lista. El proveedor, factura e IVA se aplican a todos los ítems.</p>
+          </div>
+        </div>
+        <div id="itemsFacturaList" class="items-factura-list"></div>
+        <button type="button" class="btn btn-agregar-fila" onclick="agregarItemFactura()">＋ Agregar ítem</button>
+        <div id="facturaTotales" class="factura-totales"></div>
+      </div>
+
+      <div class="field" id="campoProyecto">
+        <label>Proyecto</label>
+        <select id="proyectoPieza">
+          <option value="Nuevo">Nuevo</option>
+          <option value="Repuesto">Repuesto</option>
+        </select>
+      </div>
+      <div class="field" id="campoEstadoPieza">
+        <label>Estado</label>
+        <select id="tipoPieza">
+          <option value="Nueva">Nueva</option>
+          <option value="Usada">Usada</option>
+        </select>
       </div>
       <div class="field full-width">
         <label>Descripción</label>
@@ -151,14 +180,39 @@
         </div>
         <div id="previewAdjunto" class="preview-adjunto hidden"></div>
       </div>
+      <div class="field full-width hidden" id="seccionAvanceInicial">
+        <div class="aviso-personalizado">
+          Podés cargar un primer avance ahora (opcional) y sumar más avances después desde el detalle del registro, en la pestaña <strong>Pagos</strong>.
+        </div>
+      </div>
+      <div class="field hidden" id="campoAvanceMonto">
+        <label>Avance inicial – Monto ($)</label>
+        <input type="number" id="avanceInicialMonto" placeholder="0.00" min="0">
+      </div>
+      <div class="field hidden" id="campoAvanceDesc">
+        <label>Avance inicial – Detalle</label>
+        <input type="text" id="avanceInicialDesc" placeholder="Ej: Anticipo / primer certificado">
+      </div>
     </div>
     <button class="btn btn-register" onclick="agregarDato()">✔ Registrar</button>
   </div>
 
   <!-- HISTORIAL -->
   <div id="tab-historial" class="tab-content hidden">
-    <p class="section-title">Últimos registros</p>
-    <div class="leyenda-estados">
+    <p class="section-title">Historial</p>
+    <div class="historial-subtabs">
+      <button class="filtro-btn active" data-hist-filtro="todos" onclick="filtrarHistorial('todos')">Todos</button>
+      <button class="filtro-btn" data-hist-filtro="estandar" onclick="filtrarHistorial('estandar')">Pagos estándar</button>
+      <button class="filtro-btn" data-hist-filtro="personalizado" onclick="filtrarHistorial('personalizado')">Pagos personalizados</button>
+    </div>
+    <div id="historialPersonalizadoEstados" class="historial-subtabs hidden">
+      <button class="filtro-btn active" data-trabajo-filtro="todos" onclick="filtrarEstadoTrabajo('todos')">Todos</button>
+      <button class="filtro-btn" data-trabajo-filtro="sin_iniciar" onclick="filtrarEstadoTrabajo('sin_iniciar')">Sin iniciar</button>
+      <button class="filtro-btn" data-trabajo-filtro="iniciado" onclick="filtrarEstadoTrabajo('iniciado')">Iniciado</button>
+      <button class="filtro-btn" data-trabajo-filtro="pausado" onclick="filtrarEstadoTrabajo('pausado')">Pausado</button>
+      <button class="filtro-btn" data-trabajo-filtro="finalizado" onclick="filtrarEstadoTrabajo('finalizado')">Finalizado</button>
+    </div>
+    <div class="leyenda-estados" id="leyendaHistorialEstados">
       <span class="leyenda-item" style="background:#fcebeb;color:#791f1f;">● Pendiente</span>
       <span class="leyenda-item" style="background:#faeeda;color:#854f0b;">● Habilitado</span>
       <span class="leyenda-item" style="background:#eaf3de;color:#27500a;">● Pagado</span>
@@ -179,6 +233,61 @@
     </div>
     <p class="hint-click">Tocá un registro para ver el detalle completo</p>
     <div id="pagosList" class="pagos-list"></div>
+  </div>
+
+  <!-- ÓRDENES DE COMPRA -->
+  <div id="tab-oc" class="tab-content hidden">
+    <p class="section-title">Nueva Orden de Compra</p>
+    <div class="form-grid">
+      <div class="field">
+        <label>Proveedor</label>
+        <input type="text" id="ocProveedor" placeholder="Ej: PLC Automatizaciones">
+      </div>
+      <div class="field">
+        <label>N° de Cotización</label>
+        <input type="text" id="ocCotizacion" placeholder="Ej: 1170">
+      </div>
+      <div class="field">
+        <label>Dirección del proveedor</label>
+        <input type="text" id="ocDireccion" placeholder="Ej: Juan de la Cruz Contreras 14">
+      </div>
+      <div class="field">
+        <label>Localidad</label>
+        <input type="text" id="ocLocalidad" placeholder="Ej: Florencio Varela – Pcia. Buenos Aires">
+      </div>
+      <div class="field">
+        <label>Moneda</label>
+        <select id="ocMoneda">
+          <option value="ARS">Pesos (ARS)</option>
+          <option value="USD">Dólares (USD)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>IVA por defecto (%)</label>
+        <input type="number" id="ocIvaDefault" value="21" min="0" step="0.1">
+      </div>
+    </div>
+
+    <p class="section-title">Productos</p>
+    <div class="oc-tabla-wrap">
+      <table class="oc-tabla" id="ocTablaItems">
+        <thead>
+          <tr>
+            <th>Código</th><th>Descripción</th><th>Cant.</th><th>Precio Unit.</th><th>IVA %</th><th>Subtotal</th><th>Total</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="ocItemsBody"></tbody>
+      </table>
+    </div>
+    <button type="button" class="btn btn-agregar-fila" onclick="agregarFilaOC()">+ Agregar producto</button>
+
+    <div class="oc-totales" id="ocTotales"></div>
+
+    <button class="btn btn-register" onclick="guardarYGenerarOC()">🖨 Generar Orden de Compra</button>
+
+    <p class="section-title">Órdenes de Compra generadas</p>
+    <p class="hint-click">Tocá una orden para reimprimirla</p>
+    <div id="ocList" class="historial-list"></div>
   </div>
 
   <!-- ADMIN -->
