@@ -1218,3 +1218,290 @@ body {
     font-style: italic;
     margin-bottom: 4px;
 }
+/* ─── METODOLOGÍA DE PAGO PERSONALIZADO ──────────────────── */
+.aviso-personalizado {
+    background: var(--cream-mid);
+    border: 1.5px dashed var(--gold);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 12.5px;
+    color: var(--brown-mid);
+    line-height: 1.5;
+}
+
+.metodologia-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    margin-left: 6px;
+    background: #ece3fb;
+    color: #533ab7;
+    vertical-align: middle;
+}
+
+.avance-progreso-wrap {
+    margin-top: 8px;
+    background: var(--border-light);
+    border-radius: 20px;
+    height: 8px;
+    overflow: hidden;
+}
+.avance-progreso-bar {
+    height: 100%;
+    background: var(--gold);
+    border-radius: 20px;
+    transition: width 0.3s;
+}
+.avance-progreso-txt {
+    font-size: 11px;
+    color: var(--brown-light);
+    font-weight: 700;
+    margin-top: 4px;
+}
+
+.avances-lista { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.avance-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    background: var(--cream);
+    border: 1.5px solid var(--border-light);
+    border-radius: 10px;
+    padding: 10px 14px;
+}
+.avance-item-info { min-width: 0; }
+.avance-item-monto { font-weight: 800; color: var(--brown); font-size: 14px; }
+.avance-item-meta { font-size: 11px; color: var(--brown-light); margin-top: 2px; }
+
+.avance-form-wrap {
+    margin-top: 14px;
+    border-top: 1.5px solid var(--border-light);
+    padding-top: 14px;
+}
+
+/* ─── ÓRDENES DE COMPRA ──────────────────────────────────── */
+.oc-tabla-wrap {
+    overflow-x: auto;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    margin-top: 4px;
+}
+.oc-tabla { width: 100%; border-collapse: collapse; min-width: 720px; }
+.oc-tabla thead th {
+    background: var(--cream-mid);
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--brown-light);
+    font-weight: 700;
+    padding: 10px 10px;
+    border-bottom: 1.5px solid var(--border);
+}
+.oc-tabla tbody td {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+}
+.oc-tabla tbody input {
+    width: 100%;
+    padding: 8px 9px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-family: 'Nunito', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--brown);
+    background: #fff;
+}
+.oc-tabla .oc-col-desc  { min-width: 200px; }
+.oc-tabla .oc-col-num   { width: 90px;  }
+.oc-tabla .oc-col-money { width: 110px; }
+.oc-tabla td.oc-subtotal,
+.oc-tabla td.oc-total {
+    font-weight: 700;
+    color: var(--brown);
+    white-space: nowrap;
+    font-size: 13px;
+}
+.oc-btn-quitar-fila {
+    background: none;
+    border: 1.5px solid #f09595;
+    color: #b83030;
+    border-radius: 8px;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    font-weight: 700;
+    transition: background 0.15s;
+}
+.oc-btn-quitar-fila:hover { background: #ffd5d5; }
+
+.btn-agregar-fila {
+    display: inline-block;
+    margin-top: 12px;
+    background: none;
+    border: 1.5px dashed var(--gold);
+    color: var(--brown-mid);
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-family: 'Nunito', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.btn-agregar-fila:hover { background: var(--cream-mid); }
+
+.oc-totales {
+    margin-top: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+.oc-totales-fila {
+    display: flex;
+    justify-content: space-between;
+    width: 240px;
+    font-size: 13px;
+    color: var(--brown-mid);
+    font-weight: 600;
+}
+.oc-totales-fila.oc-total-final {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--brown);
+    border-top: 1.5px solid var(--border);
+    padding-top: 6px;
+    margin-top: 4px;
+}
+
+.oc-list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    background: #fff;
+    border: 1.5px solid var(--border-light);
+    border-radius: 12px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+.oc-list-item:hover { border-color: var(--gold); }
+.oc-list-nro { font-weight: 800; color: var(--brown); font-size: 14px; }
+.oc-list-meta { font-size: 11.5px; color: var(--brown-light); margin-top: 2px; }
+.oc-list-total { font-weight: 800; color: var(--brown-mid); font-size: 14px; white-space: nowrap; }
+
+
+/* ─── HISTORIAL: SUBDIVISIONES ───────────────────────── */
+.historial-subtabs {
+    display:flex;
+    gap:10px;
+    margin-bottom:12px;
+    flex-wrap:wrap;
+}
+.historial-subtabs.hidden { display:none; }
+
+/* ─── ÍTEMS DE UNA MISMA FACTURA ────────────────────── */
+.factura-items-wrap {
+    background:var(--cream-mid);
+    border:1.5px solid var(--border-light);
+    border-radius:12px;
+    padding:14px 16px;
+}
+.factura-item-row {
+    display:grid;
+    grid-template-columns:34px 1fr 2fr 100px 130px 34px;
+    gap:8px;
+    align-items:end;
+    margin-top:10px;
+    padding:10px;
+    background:#fff;
+    border:1px solid var(--border-light);
+    border-radius:10px;
+}
+.factura-item-row label {
+    display:block;
+    font-size:9px;
+    font-weight:700;
+    color:var(--brown-light);
+    text-transform:uppercase;
+    letter-spacing:.5px;
+    margin-bottom:5px;
+}
+.factura-item-row input {
+    width:100%;
+    padding:8px 9px;
+    border:1.5px solid var(--border);
+    border-radius:8px;
+    font-family:'Nunito',sans-serif;
+    font-size:12px;
+    font-weight:600;
+    color:var(--brown);
+    background:#fff;
+}
+.factura-item-num {
+    align-self:center;
+    font-family:'Lora',serif;
+    font-weight:700;
+    color:var(--gold);
+    text-align:center;
+}
+.factura-totales {
+    margin-top:12px;
+    margin-left:auto;
+    max-width:320px;
+    display:flex;
+    flex-direction:column;
+    gap:5px;
+    font-size:12px;
+}
+.factura-totales > div {
+    display:flex;
+    justify-content:space-between;
+    gap:20px;
+    padding:3px 4px;
+}
+.factura-totales .factura-total-final {
+    margin-top:4px;
+    padding-top:8px;
+    border-top:1px solid var(--border);
+    font-size:14px;
+}
+
+.detalle-items-factura {
+    display:flex;
+    flex-direction:column;
+    gap:7px;
+}
+.detalle-item-factura {
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    padding:8px 10px;
+    border:1px solid var(--border-light);
+    border-radius:8px;
+    background:#fff;
+    font-size:12px;
+    font-weight:600;
+}
+.estado-trabajo-select {
+    width:auto !important;
+    min-width:135px;
+    padding:7px 10px !important;
+    border:1.5px solid var(--border) !important;
+    background:#fff !important;
+    color:var(--brown) !important;
+}
+@media (max-width:760px) {
+    .factura-item-row { grid-template-columns:30px 1fr 1fr; }
+    .factura-item-row > div:nth-child(4),
+    .factura-item-row > div:nth-child(5) { grid-column:span 1; }
+    .factura-item-row .oc-btn-quitar-fila { grid-column:3; justify-self:end; }
+}
