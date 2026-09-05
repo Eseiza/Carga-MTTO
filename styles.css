@@ -117,9 +117,18 @@ body {
     font-weight: 600;
     color: var(--brown);
     background: var(--cream);
-    transition: border-color 0.2s, background 0.2s;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
     appearance: none;
     -webkit-appearance: none;
+}
+
+.field select {
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a07840' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    background-size: 13px;
+    padding-right: 38px;
+    cursor: pointer;
 }
 
 .field input:focus,
@@ -128,6 +137,11 @@ body {
     outline: none;
     border-color: var(--gold);
     background: #fff;
+    box-shadow: 0 0 0 3px rgba(200,134,10,.12);
+}
+
+.field select:hover {
+    border-color: var(--brown-light);
 }
 
 .field textarea { resize: vertical; min-height: 64px; }
@@ -1504,4 +1518,219 @@ body {
     .factura-item-row > div:nth-child(4),
     .factura-item-row > div:nth-child(5) { grid-column:span 1; }
     .factura-item-row .oc-btn-quitar-fila { grid-column:3; justify-self:end; }
+}
+
+
+/* ─── NUEVA PIEZA / PAGO · ORGANIZACIÓN (sin cards) ──── */
+.carga-card {
+    background:transparent;
+    border:none;
+    border-radius:0;
+    padding:0 0 26px;
+    margin-bottom:26px;
+    box-shadow:none;
+    border-bottom:1.5px dashed var(--border);
+}
+.carga-card:last-of-type {
+    border-bottom:none;
+    margin-bottom:0;
+    padding-bottom:0;
+}
+.carga-card-head {
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:16px;
+    margin-bottom:17px;
+}
+.carga-card-head h3 {
+    margin:0 0 4px;
+    font-family:'Lora',serif;
+    font-size:17px;
+    color:var(--brown);
+}
+.carga-card-head p {
+    margin:0;
+    color:var(--brown-light);
+    font-size:12px;
+}
+.paso-num {
+    min-width:34px; height:34px;
+    display:flex; align-items:center; justify-content:center;
+    border-radius:50%;
+    background:var(--cream-mid);
+    color:var(--gold);
+    font-size:11px; font-weight:800;
+    letter-spacing:.5px;
+}
+.btn-registrar-grande {
+    width:100%;
+    min-height:48px;
+    margin-top:2px;
+    font-size:14px;
+}
+.historial-estados-wrap {
+    display:flex; gap:5px; justify-content:flex-end; flex-wrap:wrap; margin-top:5px;
+}
+.pago-personalizado-resumen {
+    margin:14px 0 4px;
+    padding:11px 13px;
+    border:1px solid var(--border-light);
+    border-radius:10px;
+    background:var(--cream-mid);
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+}
+.pago-personalizado-resumen span { font-size:11px; font-weight:700; color:var(--brown-light); text-transform:uppercase; letter-spacing:.7px; }
+.pago-personalizado-resumen strong { font-size:13px; color:var(--brown); }
+.pago-porcentaje-control {
+    display:flex; align-items:center; gap:7px; padding:0 4px;
+}
+.pago-porcentaje-control label { margin:0; font-size:10px; font-weight:800; color:var(--brown-light); text-transform:uppercase; }
+.pago-porcentaje-control input {
+    width:76px; padding:8px 9px; border:1.5px solid var(--border); border-radius:8px;
+    background:#fff; color:var(--brown); font-weight:700;
+}
+@media (max-width:700px) {
+    .carga-card { padding-bottom:20px; margin-bottom:20px; }
+    .carga-card-head { margin-bottom:13px; }
+    .carga-card-head h3 { font-size:15px; }
+    .factura-item-row { grid-template-columns:28px 1fr 1fr 82px 100px 30px; overflow-x:auto; }
+}
+
+/* ─── REGISTRAR · DISTRIBUCIÓN DE CAMPOS ─────────────── */
+.registro-bloque {
+    margin-bottom: 18px;
+}
+.registro-bloque-titulo {
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin:0 0 9px 2px;
+    font-size:11px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.8px;
+    color:var(--brown-light);
+}
+.registro-bloque .form-grid {
+    margin-bottom:0;
+}
+
+/* Sin cajas blancas en Registrar: los grids quedan planos y son los
+   propios campos/botones los que llevan el estilo (ver más abajo). */
+#tab-carga .form-grid {
+    background:transparent;
+    border:none;
+    box-shadow:none;
+    padding:0;
+    margin-bottom:0;
+}
+#tab-carga .factura-items-wrap {
+    background:transparent;
+    border:none;
+    padding:0;
+}
+#tab-carga .factura-item-row {
+    box-shadow:0 2px 8px rgba(68,48,25,.05);
+}
+#tab-carga .pago-personalizado-resumen {
+    background:#fff;
+    box-shadow:0 2px 8px rgba(68,48,25,.05);
+}
+#tab-carga .field input,
+#tab-carga .field select,
+#tab-carga .field textarea {
+    background:#fff;
+    box-shadow:0 2px 8px rgba(68,48,25,.05);
+}
+#tab-carga .field input:focus,
+#tab-carga .field select:focus,
+#tab-carga .field textarea:focus {
+    box-shadow:0 0 0 3px rgba(200,134,10,.14);
+}
+#tab-carga .highlight-input {
+    background:#fffbf0 !important;
+}
+#tab-carga .btn-clip {
+    background:#fff;
+    box-shadow:0 2px 8px rgba(68,48,25,.05);
+}
+#tab-carga .btn-agregar-fila {
+    background:#fff;
+    box-shadow:0 2px 8px rgba(68,48,25,.05);
+}
+#tab-carga .btn-registrar-grande {
+    box-shadow:0 4px 14px rgba(58,32,10,.18);
+}
+.registro-grid-proveedor {
+    grid-template-columns: 2fr 1.35fr 1fr 1fr 1fr;
+    align-items:end;
+}
+.registro-grid-personalizado {
+    grid-template-columns: 2fr 1.1fr 1.25fr 1fr 1fr;
+    align-items:end;
+}
+.registro-grid-proveedor .field,
+.registro-grid-personalizado .field {
+    min-width:0;
+}
+@media (max-width:1100px) {
+    .registro-grid-proveedor,
+    .registro-grid-personalizado {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+@media (max-width:700px) {
+    .registro-grid-proveedor,
+    .registro-grid-personalizado {
+        grid-template-columns: 1fr 1fr;
+    }
+    .registro-grid-proveedor .field:first-child,
+    .registro-grid-personalizado .field:first-child {
+        grid-column:1 / -1;
+    }
+}
+
+/* ─── HISTORIAL · FILTRO POR MES ─────────────────────── */
+.historial-toolbar {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    flex-wrap:wrap;
+    margin-bottom:10px;
+}
+.historial-toolbar .historial-subtabs {
+    margin-bottom:0;
+}
+.historial-mes-control {
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:6px 10px;
+    background:var(--cream);
+    border:1.5px solid var(--border-light);
+    border-radius:10px;
+}
+.historial-mes-control label {
+    margin:0;
+    font-size:11px;
+    font-weight:800;
+    color:var(--brown-light);
+    text-transform:uppercase;
+    letter-spacing:.5px;
+}
+.historial-mes-control select {
+    min-width:155px;
+    border:0;
+    background:transparent;
+    color:var(--brown);
+    font-weight:700;
+    padding:5px 4px;
+    outline:none;
+}
+@media (max-width:700px) {
+    .historial-toolbar { align-items:stretch; }
+    .historial-mes-control { width:100%; justify-content:space-between; }
+    .historial-mes-control select { flex:1; }
 }
