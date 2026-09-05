@@ -55,6 +55,7 @@ let unsubscribe  = null;
 let filtroActual = 'todos';
 let historialTipoFiltro = 'todos';
 let historialTrabajoFiltro = 'todos';
+let historialMesFiltro = 'todos';
 let facturaItemCounter = 0;
 
 let ordenesCompra  = [];
@@ -65,9 +66,19 @@ let ocFilasCounter = 0;
    HELPERS
    ════════════════════════════════════════════════════════ */
 function estadoPagoInfo(ep) {
-  if (ep === 'habilitado') return { label: 'Habilitado', color: '#854f0b', bg: '#faeeda' };
-  if (ep === 'pagado')     return { label: 'Pagado',     color: '#27500a', bg: '#eaf3de' };
-  return                          { label: 'Pendiente',  color: '#791f1f', bg: '#fcebeb' };
+  if (ep === 'anticipo')       return { label: 'Anticipo', color: '#1a6080', bg: '#e4f2f8' };
+  if (ep === 'pago_final')     return { label: 'Pago final', color: '#27500a', bg: '#eaf3de' };
+  if (ep === 'habilitado')     return { label: 'Habilitado', color: '#854f0b', bg: '#faeeda' }; // compatibilidad registros viejos
+  if (ep === 'pagado')         return { label: 'Pagado', color: '#27500a', bg: '#eaf3de' }; // compatibilidad registros viejos
+  return                               { label: 'Pendiente de pago', color: '#791f1f', bg: '#fcebeb' };
+}
+
+function pagoPersonalizadoInfo(r) {
+  const ep = r.EstadoPagoPersonalizado || r.EstadoPago || 'pendiente';
+  const pct = Math.max(0, Math.min(100, parseFloat(r.PorcentajePago) || 0));
+  if (ep === 'pago_final' || pct >= 100) return { estado: 'pago_final', porcentaje: 100, ...estadoPagoInfo('pago_final') };
+  if (ep === 'anticipo' || pct > 0) return { estado: 'anticipo', porcentaje: pct, ...estadoPagoInfo('anticipo') };
+  return { estado: 'pendiente', porcentaje: 0, ...estadoPagoInfo('pendiente') };
 }
 
 function estadoTrabajoInfo(estado) {
@@ -169,7 +180,9 @@ function metaRegistro(r, incluirFecha) {
     const presu = parseFloat(r.PresupuestoTotal) || 0;
     const avz   = parseFloat(r.Total) || 0;
     const pct   = presu > 0 ? Math.min(100, Math.round((avz / presu) * 100)) : 0;
-    return `${prefFecha}Avanzado ${formatearMonto(r.Moneda || 'ARS', avz)} de ${formatearMonto(r.Moneda || 'ARS', presu)} (${pct}%)`;
+    const pago = pagoPersonalizadoInfo(r);
+    const pagoTxt = pago.estado === 'anticipo' ? ` · Pago: Anticipo ${pago.porcentaje}%` : ` · Pago: ${pago.label}`;
+    return `${prefFecha}Avanzado ${formatearMonto(r.Moneda || 'ARS', avz)} de ${formatearMonto(r.Moneda || 'ARS', presu)} (${pct}%)${pagoTxt}`;
   }
   return `${prefFecha}${r.Estado} · Cant: ${r.Cantidad}${r.Factura ? ' · Fac: ' + r.Factura : ''}${r.Codigo ? ' · Cód: ' + r.Codigo : ''}`;
 }
@@ -557,6 +570,8 @@ async function agregarDatoPersonalizado() {
     Total:             totalAvanzado.toFixed(2),
     Descripcion:       document.getElementById('descripcion').value.trim(),
     EstadoPago:        'pendiente',
+    EstadoPagoPersonalizado: 'pendiente',
+    PorcentajePago:    0,
     EstadoTrabajo:     'sin_iniciar',
     AdjuntoURL:        adjuntoURL,
     AdjuntoNombre:     adjuntoNombre,
@@ -647,7 +662,7 @@ function cambiarEtiquetaPrecio() {
 function toggleMetodologia() {
   const modo = document.getElementById('metodologiaPago').value;
   const esPersonalizado = modo === 'personalizado';
-  ['campoNombrePersonalizado','campoCodigoPersonalizado','campoPresupuestoPersonalizado','campoProyectoPersonalizado','campoEstadoPersonalizado'].forEach(id =>
+  ['campoNombrePersonalizado','campoCodigoPersonalizado','campoPresupuestoPersonalizado'].forEach(id =>
     document.getElementById(id)?.classList.toggle('hidden', !esPersonalizado)
   );
   document.getElementById('seccionItemsFactura')?.classList.toggle('hidden', esPersonalizado);
@@ -731,6 +746,17 @@ function renderModalVer(r) {
       <option value="finalizado" ${trabajoEstado(r) === 'finalizado' ? 'selected' : ''}>Finalizado</option>
     </select>`;
   }
+  if (esPersonalizado && puedeMarcarPagado()) {
+    const pp = pagoPersonalizadoInfo(r);
+    btns += `<select class="btn modal-btn-sm estado-pago-personalizado-select" onchange="cambiarPagoPersonalizado('${r.firestoreId}',this.value)">
+      <option value="pendiente" ${pp.estado === 'pendiente' ? 'selected' : ''}>Pendiente de pago</option>
+      <option value="anticipo" ${pp.estado === 'anticipo' ? 'selected' : ''}>Anticipo</option>
+      <option value="pago_final" ${pp.estado === 'pago_final' ? 'selected' : ''}>Pago final</option>
+    </select>`;
+    if (pp.estado === 'anticipo') {
+      btns += `<div class="pago-porcentaje-control"><label>Anticipo %</label><input type="number" id="pct-pago-${r.firestoreId}" min="0.1" max="99.9" step="0.1" value="${pp.porcentaje || 0}" onchange="cambiarPorcentajePago('${r.firestoreId}',this.value)"></div>`;
+    }
+  }
   if ((ep === 'habilitado' || ep === 'pagado') && puedeMarcarPagado()) {
     const etiquetaOP = (ep === 'pagado' && r.NroOP) ? '🖨 Ver / Imprimir Orden de Pago' : '🖨 Generar Orden de Pago';
     btns += `<button class="btn btn-op modal-btn-sm" onclick="generarOrdenPago('${r.firestoreId}')">${etiquetaOP}</button>`;
@@ -748,6 +774,7 @@ function renderModalVer(r) {
     <div class="modal-total">${formatearMonto(moneda, avz)} <span style="font-size:13px;font-weight:600;color:var(--brown-light);">avanzado de ${formatearMonto(moneda, presu)}</span></div>
     <div class="avance-progreso-wrap"><div class="avance-progreso-bar" style="width:${pct}%;"></div></div>
     <div class="avance-progreso-txt">${pct}% avanzado · Saldo pendiente: ${formatearMonto(moneda, saldo)}</div>
+    <div class="pago-personalizado-resumen"><span>Estado de pago</span><strong>${pagoPersonalizadoInfo(r).label}${pagoPersonalizadoInfo(r).estado === 'anticipo' ? ' · ' + pagoPersonalizadoInfo(r).porcentaje + '%' : ''}</strong></div>
     <div class="modal-grid">
       <div class="modal-field"><span class="modal-label">Entidad / Contratista</span><span class="modal-value">${r.Proveedor || '—'}</span></div>
       <div class="modal-field"><span class="modal-label">Moneda</span><span class="modal-value">${moneda === 'USD' ? 'Dólares (USD)' : 'Pesos (ARS)'}</span></div>
@@ -798,7 +825,7 @@ function renderModalVer(r) {
   document.getElementById('modalContent').innerHTML = `
     <div class="modal-header">
       <div class="modal-header-left">
-        <span class="estado-pill" style="background:${esPersonalizado ? et.bg : info.bg};color:${esPersonalizado ? et.color : info.color};">${esPersonalizado ? et.label : info.label}</span>${pb}${metBadge(r)}
+        <span class="estado-pill" style="background:${esPersonalizado ? et.bg : info.bg};color:${esPersonalizado ? et.color : info.color};">${esPersonalizado ? et.label : info.label}</span>${esPersonalizado ? `<span class="estado-pill" style="background:${pagoPersonalizadoInfo(r).bg};color:${pagoPersonalizadoInfo(r).color};">${pagoPersonalizadoInfo(r).label}${pagoPersonalizadoInfo(r).estado === 'anticipo' ? ' · ' + pagoPersonalizadoInfo(r).porcentaje + '%' : ''}</span>` : ''}${pb}${metBadge(r)}
       </div>
       <button class="modal-close" onclick="cerrarModal()">✕</button>
     </div>
@@ -862,11 +889,11 @@ async function guardarAvance(firestoreId) {
     await db.collection(COL).doc(firestoreId).update({
       Avances: avances,
       Total: nuevoTotal.toFixed(2),
-      EstadoPago: 'pendiente'
+      EstadoPago: r.EstadoPago || 'pendiente'
     });
     const idx = inventario.findIndex(x => x.firestoreId === firestoreId);
     if (idx !== -1) {
-      inventario[idx] = { ...inventario[idx], Avances: avances, Total: nuevoTotal.toFixed(2), EstadoPago: 'pendiente' };
+      inventario[idx] = { ...inventario[idx], Avances: avances, Total: nuevoTotal.toFixed(2) };
     }
     mostrarToast('✅ Avance registrado. El monto vuelve a estado Pendiente para su aprobación.', 'success', 4500);
     renderModalVer(inventario.find(x => x.firestoreId === firestoreId));
@@ -878,6 +905,11 @@ async function guardarAvance(firestoreId) {
 function renderModalEditar(firestoreId) {
   const r = inventario.find(x => x.firestoreId === firestoreId);
   if (!r) return;
+  if (r.Metodologia === 'personalizado') { renderModalEditarPersonalizado(firestoreId, r); return; }
+  renderModalEditarEstandar(firestoreId, r);
+}
+
+function renderModalEditarPersonalizado(firestoreId, r) {
   document.getElementById('modalContent').innerHTML = `
     <div class="modal-header">
       <span style="font-family:'Lora',serif;font-size:15px;color:var(--brown-mid);font-weight:600;">Editar registro</span>
@@ -914,6 +946,86 @@ function renderModalEditar(firestoreId) {
         <label>Descripción</label>
         <textarea id="e-desc">${r.Descripcion || ''}</textarea>
       </div>
+      ${bloqueAdjuntoEdicion(r)}
+    </div>
+    <div class="modal-acciones">
+      <button class="btn btn-logout modal-btn-sm" onclick="abrirDetalle('${firestoreId}')">← Cancelar</button>
+      <button class="btn btn-register modal-btn-sm" onclick="guardarEdicion('${firestoreId}')">✔ Guardar cambios</button>
+    </div>
+  `;
+}
+
+function renderModalEditarEstandar(firestoreId, r) {
+  const conIVA = typeof r.IVAIncluido === 'boolean' ? r.IVAIncluido : (parseFloat(r.IVA) > 0);
+  const ivaPct = r.IVAPorcentaje != null ? r.IVAPorcentaje : 21;
+
+  document.getElementById('modalContent').innerHTML = `
+    <div class="modal-header">
+      <span style="font-family:'Lora',serif;font-size:15px;color:var(--brown-mid);font-weight:600;">Editar registro</span>
+      <button class="modal-close" onclick="cerrarModal()">✕</button>
+    </div>
+    <div class="modal-edit-grid">
+      <div class="field"><label>Proveedor</label><input type="text" id="e-proveedor" value="${r.Proveedor || ''}"></div>
+      <div class="field"><label>N° Factura</label><input type="text" id="e-factura" value="${r.Factura || ''}"></div>
+      <div class="field"><label>Moneda</label>
+        <select id="e-moneda" onchange="recalcularFacturaItemsEdit()">
+          <option value="ARS" ${(r.Moneda || 'ARS') === 'ARS' ? 'selected' : ''}>Pesos (ARS)</option>
+          <option value="USD" ${(r.Moneda || 'ARS') === 'USD' ? 'selected' : ''}>Dólares (USD)</option>
+        </select>
+      </div>
+      <div class="field"><label>IVA</label>
+        <select id="e-tipoIVA" onchange="toggleIVAEdit()">
+          <option value="con" ${conIVA ? 'selected' : ''}>Con IVA</option>
+          <option value="sin" ${!conIVA ? 'selected' : ''}>Sin IVA</option>
+        </select>
+      </div>
+      <div class="field${conIVA ? '' : ' hidden'}" id="e-campoIVAPorcentaje">
+        <label>Porcentaje de IVA</label>
+        <input type="number" id="e-ivaPorcentaje" value="${ivaPct}" min="0" step="0.1" oninput="recalcularFacturaItemsEdit()">
+      </div>
+      <div class="field"><label>Proyecto</label>
+        <select id="e-proyecto">
+          <option value="Nuevo"    ${(r.Proyecto || '') === 'Nuevo'    ? 'selected' : ''}>Nuevo</option>
+          <option value="Repuesto" ${(r.Proyecto || '') === 'Repuesto' ? 'selected' : ''}>Repuesto</option>
+        </select>
+      </div>
+      <div class="field"><label>Estado pieza</label>
+        <select id="e-estado">
+          <option value="Nueva" ${(r.Estado || '') === 'Nueva' ? 'selected' : ''}>Nueva</option>
+          <option value="Usada" ${(r.Estado || '') === 'Usada' ? 'selected' : ''}>Usada</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="factura-items-wrap" style="margin-top:16px;">
+      <label style="display:block;margin-bottom:8px;">Ítems de la factura</label>
+      <div id="e-itemsFacturaList" class="items-factura-list"></div>
+      <button type="button" class="btn btn-agregar-fila" onclick="agregarItemFacturaEdit()">＋ Agregar ítem</button>
+      <div id="e-facturaTotales" class="factura-totales"></div>
+    </div>
+
+    <div class="modal-edit-grid" style="margin-top:16px;">
+      <div class="field" style="grid-column:1/-1;">
+        <label>Descripción</label>
+        <textarea id="e-desc">${r.Descripcion || ''}</textarea>
+      </div>
+      ${bloqueAdjuntoEdicion(r)}
+    </div>
+    <div class="modal-acciones">
+      <button class="btn btn-logout modal-btn-sm" onclick="abrirDetalle('${firestoreId}')">← Cancelar</button>
+      <button class="btn btn-register modal-btn-sm" onclick="guardarEdicion('${firestoreId}')">✔ Guardar cambios</button>
+    </div>
+  `;
+
+  // Precargar ítems existentes (o un único ítem derivado de los campos viejos, por compatibilidad)
+  const itemsIniciales = Array.isArray(r.Items) && r.Items.length
+    ? r.Items
+    : [{ codigo: r.Codigo || '', descripcion: r.Pieza || '', cantidad: r.Cantidad || 1, precio: parseFloat(r.Precio_Unit) || 0 }];
+  itemsIniciales.forEach(it => agregarItemFacturaEdit(it));
+}
+
+function bloqueAdjuntoEdicion(r) {
+  return `
       <div class="field" style="grid-column:1/-1;">
         <label>Archivo adjunto</label>
         ${r.AdjuntoURL ? `
@@ -944,16 +1056,125 @@ function renderModalEditar(firestoreId) {
           <button type="button" id="e-btnQuitarNuevo" class="btn-quitar-adjunto hidden" onclick="quitarNuevoAdjuntoEdicion()">✕</button>
         </div>
         <div id="e-previewAdjunto" class="preview-adjunto hidden"></div>
-      </div>
-    </div>
-    <div class="modal-acciones">
-      <button class="btn btn-logout modal-btn-sm" onclick="abrirDetalle('${firestoreId}')">← Cancelar</button>
-      <button class="btn btn-register modal-btn-sm" onclick="guardarEdicion('${firestoreId}')">✔ Guardar cambios</button>
-    </div>
+      </div>`;
+}
+
+/* ── Editor de ítems de factura dentro del modal de edición ── */
+function agregarItemFacturaEdit(datos = {}) {
+  const lista = document.getElementById('e-itemsFacturaList');
+  if (!lista) return;
+  const id = 'e-factura-item-' + (++facturaItemCounter);
+  const div = document.createElement('div');
+  div.className = 'factura-item-row';
+  div.id = id;
+  div.innerHTML = `
+    <div class="factura-item-num">${lista.children.length + 1}</div>
+    <div><label>Código</label><input type="text" class="e-fi-codigo" placeholder="Código" value="${datos.codigo || ''}"></div>
+    <div class="fi-desc-wrap"><label>Pieza / producto</label><input type="text" class="e-fi-desc" placeholder="Nombre de la pieza" value="${datos.descripcion || ''}"></div>
+    <div><label>Cantidad</label><input type="number" class="e-fi-cant" min="1" step="1" value="${datos.cantidad || 1}"></div>
+    <div><label>Precio unit.</label><input type="number" class="e-fi-precio" min="0" step="0.01" value="${datos.precio || 0}"></div>
+    <button type="button" class="oc-btn-quitar-fila" onclick="quitarItemFacturaEdit('${id}')" title="Quitar ítem">✕</button>
   `;
+  lista.appendChild(div);
+  div.querySelectorAll('input').forEach(input => input.addEventListener('input', recalcularFacturaItemsEdit));
+  renumerarItemsFacturaEdit();
+  recalcularFacturaItemsEdit();
+}
+
+function quitarItemFacturaEdit(id) {
+  document.getElementById(id)?.remove();
+  renumerarItemsFacturaEdit();
+  recalcularFacturaItemsEdit();
+}
+
+function renumerarItemsFacturaEdit() {
+  document.querySelectorAll('#e-itemsFacturaList .factura-item-row').forEach((row, i) => {
+    const n = row.querySelector('.factura-item-num');
+    if (n) n.textContent = i + 1;
+  });
+}
+
+function leerItemsFacturaEdit() {
+  return [...document.querySelectorAll('#e-itemsFacturaList .factura-item-row')].map(row => {
+    const cantidad = parseInt(row.querySelector('.e-fi-cant').value) || 0;
+    const precio   = parseFloat(row.querySelector('.e-fi-precio').value) || 0;
+    return {
+      codigo:      row.querySelector('.e-fi-codigo').value.trim(),
+      descripcion: row.querySelector('.e-fi-desc').value.trim(),
+      cantidad,
+      precio,
+      total: cantidad * precio
+    };
+  }).filter(it => it.descripcion || it.codigo || it.precio > 0);
+}
+
+function toggleIVAEdit() {
+  const conIVA = document.getElementById('e-tipoIVA')?.value === 'con';
+  document.getElementById('e-campoIVAPorcentaje')?.classList.toggle('hidden', !conIVA);
+  recalcularFacturaItemsEdit();
+}
+
+function recalcularFacturaItemsEdit() {
+  const items  = leerItemsFacturaEdit();
+  const moneda = document.getElementById('e-moneda')?.value || 'ARS';
+  const conIVA = document.getElementById('e-tipoIVA')?.value === 'con';
+  const pct    = conIVA ? (parseFloat(document.getElementById('e-ivaPorcentaje')?.value) || 0) : 0;
+  const subtotal = items.reduce((a, it) => a + it.total, 0);
+  const iva      = subtotal * pct / 100;
+  const total    = subtotal + iva;
+  const box = document.getElementById('e-facturaTotales');
+  if (box) box.innerHTML = `
+    <div><span>Subtotal</span><strong>${formatearMonto(moneda, subtotal)}</strong></div>
+    <div><span>IVA${conIVA ? ` (${pct}%)` : ''}</span><strong>${formatearMonto(moneda, iva)}</strong></div>
+    <div class="factura-total-final"><span>TOTAL</span><strong>${formatearMonto(moneda, total)}</strong></div>`;
 }
 
 async function guardarEdicion(firestoreId) {
+  const r = inventario.find(x => x.firestoreId === firestoreId);
+  if (!r) return;
+  if (r.Metodologia === 'personalizado') { await guardarEdicionPersonalizado(firestoreId); return; }
+  await guardarEdicionEstandar(firestoreId);
+}
+
+async function guardarEdicionEstandar(firestoreId) {
+  const proveedor = document.getElementById('e-proveedor').value.trim();
+  const moneda    = document.getElementById('e-moneda').value;
+  const conIVA    = document.getElementById('e-tipoIVA').value === 'con';
+  const ivaPct    = conIVA ? (parseFloat(document.getElementById('e-ivaPorcentaje').value) || 0) : 0;
+  const items     = leerItemsFacturaEdit().filter(it => it.descripcion && it.cantidad > 0 && it.precio >= 0);
+
+  if (!proveedor)   { alert('Ingresá el nombre del proveedor.'); return; }
+  if (!items.length){ alert('Agregá al menos un ítem con descripción, cantidad y precio.'); return; }
+
+  const subtotal      = items.reduce((sum, it) => sum + it.total, 0);
+  const iva           = subtotal * ivaPct / 100;
+  const totalFactura  = subtotal + iva;
+  const primerItem    = items[0];
+
+  const cambios = {
+    Pieza:         primerItem.descripcion,
+    Codigo:        primerItem.codigo,
+    Factura:       document.getElementById('e-factura').value.trim(),
+    Proveedor:     proveedor,
+    Moneda:        moneda,
+    Proyecto:      document.getElementById('e-proyecto').value,
+    Estado:        document.getElementById('e-estado').value,
+    Cantidad:      primerItem.cantidad,
+    Precio_Unit:   primerItem.precio.toFixed(2),
+    Subtotal:      subtotal.toFixed(2),
+    IVA:           iva.toFixed(2),
+    IVAIncluido:   conIVA,
+    IVAPorcentaje: ivaPct,
+    Total:         totalFactura.toFixed(2),
+    Items:         items.map(it => ({ ...it, precio: Number(it.precio).toFixed(2), total: Number(it.total).toFixed(2) })),
+    CantidadItems: items.length,
+    Descripcion:   document.getElementById('e-desc').value.trim(),
+  };
+
+  await guardarCambiosConAdjunto(firestoreId, cambios, primerItem.descripcion);
+}
+
+async function guardarEdicionPersonalizado(firestoreId) {
   const cant  = parseInt(document.getElementById('e-cantidad').value) || 1;
   const punit = parseFloat(document.getElementById('e-punit').value)  || 0;
   const pieza = document.getElementById('e-pieza').value.trim();
@@ -973,6 +1194,10 @@ async function guardarEdicion(firestoreId) {
     Descripcion: document.getElementById('e-desc').value.trim(),
   };
 
+  await guardarCambiosConAdjunto(firestoreId, cambios, pieza);
+}
+
+async function guardarCambiosConAdjunto(firestoreId, cambios, nombreParaArchivo) {
   // ── Manejo de adjunto ──────────────────────────────────
   const accion    = document.getElementById('e-adjunto-accion')?.value || 'mantener';
   const fileInput = document.getElementById('e-archivoAdjunto');
@@ -990,7 +1215,7 @@ async function guardarEdicion(firestoreId) {
     mostrarToast('📎 Comprimiendo y subiendo adjunto...', 'loading', 0);
     try {
       const ext  = nuevoFile.name.split('.').pop().toLowerCase();
-      const path = `adjuntos/${Date.now()}_${pieza.replace(/\s+/g, '_')}.${ext}`;
+      const path = `adjuntos/${Date.now()}_${nombreParaArchivo.replace(/\s+/g, '_')}.${ext}`;
       const archivoASubir = nuevoFile.type.startsWith('image/') ? await comprimirImagen(nuevoFile) : nuevoFile;
       const snap = await storage.ref(path).put(archivoASubir);
       cambios.AdjuntoURL    = await snap.ref.getDownloadURL();
@@ -1122,14 +1347,53 @@ function cambiarEstadoTrabajo(firestoreId, nuevoEstado) {
     .catch(e => alert('Error al actualizar el estado del trabajo: ' + e.message));
 }
 
+function actualizarFiltroMesHistorial() {
+  const select = document.getElementById('historialMes');
+  if (!select) return;
+  const meses = [...new Set(inventario.map(r => {
+    const ts = Number(r.timestamp);
+    if (!Number.isNaN(ts) && ts > 0) {
+      const d = new Date(ts);
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    }
+    const m = String(r.Fecha || '').match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+    return m ? `${m[3]}-${String(m[2]).padStart(2,'0')}` : null;
+  }).filter(Boolean))].sort().reverse();
+
+  const actual = historialMesFiltro;
+  select.innerHTML = '<option value="todos">Todos los meses</option>' + meses.map(key => {
+    const [y,m] = key.split('-');
+    const nombre = new Date(Number(y), Number(m)-1, 1).toLocaleDateString('es-AR', {month:'long', year:'numeric'});
+    return `<option value="${key}">${nombre.charAt(0).toUpperCase()+nombre.slice(1)}</option>`;
+  }).join('');
+  select.value = meses.includes(actual) || actual === 'todos' ? actual : 'todos';
+  if (select.value !== actual) historialMesFiltro = 'todos';
+}
+
+function claveMesRegistro(r) {
+  const ts = Number(r.timestamp);
+  if (!Number.isNaN(ts) && ts > 0) {
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  }
+  const m = String(r.Fecha || '').match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  return m ? `${m[3]}-${String(m[2]).padStart(2,'0')}` : '';
+}
+
+function filtrarHistorialMes(mes) {
+  historialMesFiltro = mes || 'todos';
+  renderHistorial();
+}
+
 function renderHistorial() {
   const lista = document.getElementById('historialList');
   if (!lista) return;
+  actualizarFiltroMesHistorial();
 
-  let items = (['admin', 'romero'].includes(userActual))
-    ? [...inventario].reverse()
-    : [...inventario].filter(r => r.Usuario === 'guillermo').reverse();
+  // Guillermo debe poder consultar todo el historial, no solamente sus propios registros.
+  let items = [...inventario].reverse();
 
+  if (historialMesFiltro !== 'todos') items = items.filter(r => claveMesRegistro(r) === historialMesFiltro);
   if (historialTipoFiltro === 'estandar') items = items.filter(r => r.Metodologia !== 'personalizado');
   if (historialTipoFiltro === 'personalizado') {
     items = items.filter(r => r.Metodologia === 'personalizado');
@@ -1141,10 +1405,11 @@ function renderHistorial() {
     return;
   }
 
-  lista.innerHTML = items.slice(0, 50).map(r => {
+  lista.innerHTML = items.map(r => {
     const esPersonalizado = r.Metodologia === 'personalizado';
     const estado = esPersonalizado ? trabajoEstado(r) : (r.EstadoPago || 'pendiente');
     const info = esPersonalizado ? estadoTrabajoInfo(estado) : estadoPagoInfo(estado);
+    const infoPagoPersonalizado = esPersonalizado ? pagoPersonalizadoInfo(r) : null;
 
     const btnE = puedeEliminar()
       ? `<button class="btn-eliminar" onclick="event.stopPropagation();eliminarRegistro('${r.firestoreId}')" title="Eliminar">✕</button>` : '';
@@ -1171,7 +1436,10 @@ function renderHistorial() {
         <div style="text-align:right;">
           <div class="historial-total">${formatearMonto(r.Moneda || 'ARS', r.Total)}</div>
           <div class="historial-fecha">${r.Fecha} ${r.Hora}</div>
-          <span class="estado-pill" style="background:${info.bg};color:${info.color};">${info.label}</span>
+          <div class="historial-estados-wrap">
+            <span class="estado-pill" style="background:${info.bg};color:${info.color};">${info.label}</span>
+            ${esPersonalizado ? `<span class="estado-pill" style="background:${infoPagoPersonalizado.bg};color:${infoPagoPersonalizado.color};">${infoPagoPersonalizado.label}${infoPagoPersonalizado.estado === 'anticipo' ? ' · ' + infoPagoPersonalizado.porcentaje + '%' : ''}</span>` : ''}
+          </div>
         </div>
         ${btnEdit}${btnE}
       </div>
@@ -1276,6 +1544,43 @@ function renderPagos(filtro) {
       </div>
     </div>`;
   }).join('');
+}
+
+async function cambiarPagoPersonalizado(firestoreId, nuevoEstado) {
+  if (!puedeMarcarPagado()) return;
+  const r = inventario.find(x => x.firestoreId === firestoreId);
+  if (!r || r.Metodologia !== 'personalizado') return;
+  if (nuevoEstado === 'pago_final') {
+    await actualizarPagoPersonalizado(firestoreId, 'pago_final', 100);
+    return;
+  }
+  if (nuevoEstado === 'anticipo') {
+    const actual = pagoPersonalizadoInfo(r).porcentaje || 50;
+    await actualizarPagoPersonalizado(firestoreId, 'anticipo', Math.min(99.9, Math.max(0.1, actual)));
+    return;
+  }
+  await actualizarPagoPersonalizado(firestoreId, 'pendiente', 0);
+}
+
+async function cambiarPorcentajePago(firestoreId, valor) {
+  if (!puedeMarcarPagado()) return;
+  const pct = Math.min(99.9, Math.max(0.1, parseFloat(valor) || 0));
+  await actualizarPagoPersonalizado(firestoreId, 'anticipo', pct);
+}
+
+async function actualizarPagoPersonalizado(firestoreId, estado, porcentaje) {
+  const r = inventario.find(x => x.firestoreId === firestoreId);
+  if (!r) return;
+  const cambios = { EstadoPagoPersonalizado: estado, PorcentajePago: porcentaje };
+  // Mantener EstadoPago por compatibilidad, sin usarlo como estado principal del personalizado.
+  cambios.EstadoPago = estado === 'pago_final' ? 'pagado' : estado === 'anticipo' ? 'habilitado' : 'pendiente';
+  try {
+    await db.collection(COL).doc(firestoreId).update(cambios);
+    Object.assign(r, cambios);
+    renderModalVer(r);
+  } catch (e) {
+    alert('Error al actualizar el pago: ' + e.message);
+  }
 }
 
 async function cambiarEstado(firestoreId, nuevoEstado) {
