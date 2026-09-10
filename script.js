@@ -702,6 +702,7 @@ function cerrarModal() {
 document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarModal(); });
 
 function renderModalVer(r) {
+  document.getElementById('modalContent').classList.remove('modal-card-wide');
   const ep   = r.EstadoPago || 'pendiente';
   const info = estadoPagoInfo(ep);
   const pb   = r.Proyecto
@@ -766,14 +767,16 @@ function renderModalVer(r) {
   if (esPersonalizado) {
     const presu = parseFloat(r.PresupuestoTotal) || 0;
     const avz   = parseFloat(r.Total) || 0;
+    const avancesRaw = Array.isArray(r.Avances) ? r.Avances : [];
+    const anticipado = avancesRaw.filter(a => a.tipo === 'anticipo').reduce((s,a) => s + (parseFloat(a.monto)||0), 0);
     const saldo = Math.max(0, presu - avz);
     const pct   = presu > 0 ? Math.min(100, Math.round((avz / presu) * 100)) : 0;
-    const avances = Array.isArray(r.Avances) ? [...r.Avances].reverse() : [];
+    const avances = avancesRaw.map((a, idx) => ({ ...a, _idx: idx })).reverse();
 
     bloqueCentral = `
-    <div class="modal-total">${formatearMonto(moneda, avz)} <span style="font-size:13px;font-weight:600;color:var(--brown-light);">avanzado de ${formatearMonto(moneda, presu)}</span></div>
+    <div class="modal-total">${formatearMonto(moneda, presu)} <span style="font-size:13px;font-weight:600;color:var(--brown-light);">presupuesto total</span></div>
     <div class="avance-progreso-wrap"><div class="avance-progreso-bar" style="width:${pct}%;"></div></div>
-    <div class="avance-progreso-txt">${pct}% avanzado · Saldo pendiente: ${formatearMonto(moneda, saldo)}</div>
+    <div class="avance-progreso-txt">${formatearMonto(moneda, avz)} pagado (avance) · ${pct}% · Saldo pendiente: ${formatearMonto(moneda, saldo)}${anticipado > 0 ? ' · ' + formatearMonto(moneda, anticipado) + ' anticipado (solicitado, no pagado aún)' : ''}</div>
     <div class="pago-personalizado-resumen"><span>Estado de pago</span><strong>${pagoPersonalizadoInfo(r).label}${pagoPersonalizadoInfo(r).estado === 'anticipo' ? ' · ' + pagoPersonalizadoInfo(r).porcentaje + '%' : ''}</strong></div>
     <div class="modal-grid">
       <div class="modal-field"><span class="modal-label">Entidad / Contratista</span><span class="modal-value">${r.Proveedor || '—'}</span></div>
@@ -785,13 +788,18 @@ function renderModalVer(r) {
     </div>
     ${r.Descripcion ? `<div class="modal-desc-wrap"><span class="modal-label">Descripción</span><p class="modal-desc">${r.Descripcion}</p></div>` : ''}
     <div class="modal-desc-wrap">
-      <span class="modal-label">Avances registrados</span>
+      <span class="modal-label">Avances / anticipos registrados</span>
       <div class="avances-lista">
         ${avances.length ? avances.map(a => `
           <div class="avance-item">
             <div class="avance-item-info">
-              <div class="avance-item-monto">${formatearMonto(moneda, a.monto)}</div>
+              <div class="avance-item-monto"><span class="avance-tipo-tag avance-tipo-${a.tipo === 'anticipo' ? 'anticipo' : (a.tipo === 'avance' ? 'avance' : 'legacy')}">${a.tipo === 'anticipo' ? 'Anticipo · solicitado' : (a.tipo === 'avance' ? 'Avance · pagado' : 'Sin clasificar')}</span> ${formatearMonto(moneda, a.monto)}</div>
               <div class="avance-item-meta">${a.fecha}${a.hora ? ' · ' + a.hora : ''}${a.descripcion ? ' · ' + a.descripcion : ''}</div>
+            </div>
+            <div class="avance-item-acciones">
+              ${(a.tipo !== 'avance' && puedeMarcarPagado()) ? `<button class="avance-item-btn avance-item-btn-pagar" title="Marcar como pagado" onclick="marcarAvancePagado('${r.firestoreId}', ${a._idx})">✔</button>` : ''}
+              ${puedeEditar() ? `<button class="avance-item-btn" title="Editar" onclick="renderModalAgregarAvance('${r.firestoreId}', ${a._idx})">✎</button>` : ''}
+              ${puedeEditar() ? `<button class="avance-item-btn avance-item-btn-danger" title="Eliminar" onclick="eliminarAvance('${r.firestoreId}', ${a._idx})">✕</button>` : ''}
             </div>
           </div>`).join('') : '<p class="pagos-empty">Todavía no se cargaron avances.</p>'}
       </div>
@@ -800,19 +808,16 @@ function renderModalVer(r) {
     bloqueCentral = `
     <div class="modal-total">${formatearMonto(moneda, r.Total)}</div>
     <div class="modal-grid">
-      <div class="modal-field"><span class="modal-label">Código</span><span class="modal-value">${r.Codigo || '—'}</span></div>
       <div class="modal-field"><span class="modal-label">N° Factura</span><span class="modal-value">${r.Factura || '—'}</span></div>
       <div class="modal-field"><span class="modal-label">Proveedor</span><span class="modal-value">${r.Proveedor || '—'}</span></div>
       <div class="modal-field"><span class="modal-label">Moneda</span><span class="modal-value">${moneda === 'USD' ? 'Dólares (USD)' : 'Pesos (ARS)'}</span></div>
       <div class="modal-field"><span class="modal-label">Estado pieza</span><span class="modal-value">${r.Estado || '—'}</span></div>
       <div class="modal-field"><span class="modal-label">Proyecto</span><span class="modal-value">${r.Proyecto || '—'}</span></div>
-      <div class="modal-field"><span class="modal-label">Cantidad</span><span class="modal-value">${r.Cantidad}</span></div>
-      <div class="modal-field"><span class="modal-label">Precio unitario</span><span class="modal-value">${formatearMonto(moneda, r.Precio_Unit || 0)}</span></div>
       <div class="modal-field"><span class="modal-label">Fecha</span><span class="modal-value">${r.Fecha} ${r.Hora}</span></div>
       <div class="modal-field"><span class="modal-label">Registrado por</span><span class="modal-value">${r.Usuario}</span></div>
       ${r.NroOP ? `<div class="modal-field"><span class="modal-label">N° OP</span><span class="modal-value">${r.NroOP}</span></div>` : ''}
     </div>
-    ${Array.isArray(r.Items) && r.Items.length > 1 ? `
+    ${Array.isArray(r.Items) && r.Items.length > 0 ? `
       <div class="modal-desc-wrap">
         <span class="modal-label">Ítems de la factura (${r.Items.length})</span>
         <div class="detalle-items-factura">
@@ -837,54 +842,110 @@ function renderModalVer(r) {
 }
 
 /* ── Agregar avance a un registro personalizado ── */
-function renderModalAgregarAvance(firestoreId) {
+function renderModalAgregarAvance(firestoreId, editIndex = null) {
   const r = inventario.find(x => x.firestoreId === firestoreId);
   if (!r) return;
+  const editando = editIndex !== null && Array.isArray(r.Avances) && r.Avances[editIndex];
+  const a = editando ? r.Avances[editIndex] : null;
+  const puedeMarcarPago = puedeMarcarPagado();
+  const tipoLock = (a && a.tipo === 'avance') ? 'avance' : 'anticipo';
+
   document.getElementById('modalContent').innerHTML = `
     <div class="modal-header">
-      <span style="font-family:'Lora',serif;font-size:15px;color:var(--brown-mid);font-weight:600;">Agregar avance · ${r.Pieza}</span>
+      <span style="font-family:'Lora',serif;font-size:15px;color:var(--brown-mid);font-weight:600;">${editando ? 'Editar' : 'Agregar'} avance · ${r.Pieza}</span>
       <button class="modal-close" onclick="renderModalVer(inventario.find(x=>x.firestoreId==='${firestoreId}'))">✕</button>
     </div>
     <div class="avance-form-wrap">
       <div class="field">
-        <label>Monto del avance ($)</label>
-        <input type="number" id="av-monto" class="highlight-input" placeholder="0.00" min="0">
+        <label>Tipo</label>
+        ${puedeMarcarPago ? `
+        <select id="av-tipo">
+          <option value="avance"   ${tipoLock === 'avance'   ? 'selected' : ''}>Avance · ya se pagó</option>
+          <option value="anticipo" ${tipoLock === 'anticipo' ? 'selected' : ''}>Anticipo · se solicitó, todavía no se pagó</option>
+        </select>` : `
+        <select id="av-tipo" disabled>
+          <option value="${tipoLock}" selected>${tipoLock === 'avance' ? 'Avance · ya se pagó' : 'Anticipo · se solicitó, todavía no se pagó'}</option>
+        </select>
+        <p style="font-size:11px;color:var(--brown-light);margin-top:6px;">Solo Romero / oficina puede marcarlo como pagado.</p>`}
+      </div>
+      <div class="field">
+        <label>Monto ($)</label>
+        <input type="number" id="av-monto" class="highlight-input" placeholder="0.00" min="0" value="${a ? a.monto : ''}">
       </div>
       <div class="field">
         <label>Detalle</label>
-        <input type="text" id="av-desc" placeholder="Ej: Certificado N° 2 - 40% de obra">
+        <input type="text" id="av-desc" placeholder="Ej: Certificado N° 2 - 40% de obra" value="${a ? (a.descripcion || '') : ''}">
       </div>
     </div>
     <div class="modal-acciones">
+      ${editando ? `<button class="btn btn-danger modal-btn-sm" onclick="eliminarAvance('${firestoreId}', ${editIndex})">✕ Eliminar</button>` : ''}
       <button class="btn btn-logout modal-btn-sm" onclick="renderModalVer(inventario.find(x=>x.firestoreId==='${firestoreId}'))">← Cancelar</button>
-      <button class="btn btn-register modal-btn-sm" onclick="guardarAvance('${firestoreId}')">✔ Guardar avance</button>
+      <button class="btn btn-register modal-btn-sm" onclick="guardarAvance('${firestoreId}', ${editando ? editIndex : 'null'})">✔ ${editando ? 'Guardar cambios' : 'Guardar avance'}</button>
     </div>
   `;
 }
 
-async function guardarAvance(firestoreId) {
+async function guardarAvance(firestoreId, editIndex = null) {
   const r = inventario.find(x => x.firestoreId === firestoreId);
   if (!r) return;
+  const tipo  = document.getElementById('av-tipo').value === 'anticipo' ? 'anticipo' : 'avance';
   const monto = parseFloat(document.getElementById('av-monto').value) || 0;
   const desc  = document.getElementById('av-desc').value.trim();
-  if (monto <= 0) { alert('El monto del avance debe ser mayor a 0.'); return; }
+  if (monto <= 0) { alert('El monto debe ser mayor a 0.'); return; }
 
-  const ahora = new Date();
-  const nuevoAvance = {
-    fecha:       ahora.toLocaleDateString('es-AR'),
-    hora:        ahora.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    ts:          ahora.getTime(),
-    monto:       monto.toFixed(2),
-    descripcion: desc || 'Avance',
-    usuario:     userActual
-  };
+  const avances = Array.isArray(r.Avances) ? [...r.Avances] : [];
 
-  const avances = Array.isArray(r.Avances) ? [...r.Avances, nuevoAvance] : [nuevoAvance];
-  const nuevoTotal = avances.reduce((a, v) => a + parseFloat(v.monto), 0);
+  if (editIndex !== null && avances[editIndex]) {
+    avances[editIndex] = {
+      ...avances[editIndex],
+      monto:       monto.toFixed(2),
+      tipo:        tipo,
+      descripcion: desc || (tipo === 'anticipo' ? 'Anticipo' : 'Avance')
+    };
+  } else {
+    const ahora = new Date();
+    avances.push({
+      fecha:       ahora.toLocaleDateString('es-AR'),
+      hora:        ahora.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      ts:          ahora.getTime(),
+      monto:       monto.toFixed(2),
+      tipo:        tipo,
+      descripcion: desc || (tipo === 'anticipo' ? 'Anticipo' : 'Avance'),
+      usuario:     userActual
+    });
+  }
 
-  // Cada actualización del monto vuelve a poner el registro en estado Pendiente,
-  // ya que el nuevo importe acumulado necesita ser habilitado/pagado de nuevo.
-  mostrarToast('💾 Guardando avance...', 'loading', 0);
+  await guardarAvancesEnRegistro(firestoreId, avances, editIndex !== null ? 'Avance actualizado.' : 'Avance registrado.');
+}
+
+async function eliminarAvance(firestoreId, index) {
+  const r = inventario.find(x => x.firestoreId === firestoreId);
+  if (!r || !Array.isArray(r.Avances) || !r.Avances[index]) return;
+  if (!confirm('¿Eliminar este avance/anticipo?')) return;
+  const avances = r.Avances.filter((_, i) => i !== index);
+  await guardarAvancesEnRegistro(firestoreId, avances, 'Avance eliminado.');
+}
+
+// Solo Romero/oficina puede confirmar que un anticipo ya fue pagado.
+async function marcarAvancePagado(firestoreId, index) {
+  if (!puedeMarcarPagado()) return;
+  const r = inventario.find(x => x.firestoreId === firestoreId);
+  if (!r || !Array.isArray(r.Avances) || !r.Avances[index]) return;
+  const avances = [...r.Avances];
+  avances[index] = { ...avances[index], tipo: 'avance' };
+  await guardarAvancesEnRegistro(firestoreId, avances, 'Marcado como pagado.');
+}
+
+// Sólo lo pagado (avance) suma al total avanzado; el anticipo (solicitado,
+// todavía no pagado) se muestra aparte y no infla el progreso.
+async function guardarAvancesEnRegistro(firestoreId, avances, mensajeExito) {
+  const r = inventario.find(x => x.firestoreId === firestoreId);
+  if (!r) return;
+  const nuevoTotal = avances
+    .filter(v => v.tipo !== 'anticipo')
+    .reduce((a, v) => a + (parseFloat(v.monto) || 0), 0);
+
+  mostrarToast('💾 Guardando...', 'loading', 0);
   try {
     await db.collection(COL).doc(firestoreId).update({
       Avances: avances,
@@ -895,10 +956,10 @@ async function guardarAvance(firestoreId) {
     if (idx !== -1) {
       inventario[idx] = { ...inventario[idx], Avances: avances, Total: nuevoTotal.toFixed(2) };
     }
-    mostrarToast('✅ Avance registrado. El monto vuelve a estado Pendiente para su aprobación.', 'success', 4500);
+    mostrarToast('✅ ' + mensajeExito, 'success', 3500);
     renderModalVer(inventario.find(x => x.firestoreId === firestoreId));
   } catch (e) {
-    mostrarToast('❌ Error al guardar el avance: ' + e.message, 'error', 5000);
+    mostrarToast('❌ Error al guardar: ' + e.message, 'error', 5000);
   }
 }
 
@@ -909,13 +970,31 @@ function renderModalEditar(firestoreId) {
   renderModalEditarEstandar(firestoreId, r);
 }
 
+// ── Permite cambiar de "estándar" a "personalizado" (o viceversa) mientras se edita ──
+function cambiarMetodologiaEdicion(firestoreId, nuevaMetodologia) {
+  const r = inventario.find(x => x.firestoreId === firestoreId);
+  if (!r) return;
+  if (nuevaMetodologia === 'personalizado') {
+    renderModalEditarPersonalizado(firestoreId, r);
+  } else {
+    renderModalEditarEstandar(firestoreId, r);
+  }
+}
+
 function renderModalEditarPersonalizado(firestoreId, r) {
+  document.getElementById('modalContent').classList.add('modal-card-wide');
   document.getElementById('modalContent').innerHTML = `
     <div class="modal-header">
       <span style="font-family:'Lora',serif;font-size:15px;color:var(--brown-mid);font-weight:600;">Editar registro</span>
       <button class="modal-close" onclick="cerrarModal()">✕</button>
     </div>
     <div class="modal-edit-grid">
+      <div class="field" style="grid-column:1/-1;"><label>Metodología de pago</label>
+        <select id="e-metodologia" onchange="cambiarMetodologiaEdicion('${firestoreId}', this.value)">
+          <option value="estandar">Estándar · pieza / factura</option>
+          <option value="personalizado" selected>Personalizado · trabajo / servicio</option>
+        </select>
+      </div>
       <div class="field"><label>Nombre Pieza</label><input type="text" id="e-pieza" value="${r.Pieza || ''}"></div>
       <div class="field"><label>Código</label><input type="text" id="e-codigo" value="${r.Codigo || ''}"></div>
       <div class="field"><label>N° Factura</label><input type="text" id="e-factura" value="${r.Factura || ''}"></div>
@@ -938,10 +1017,18 @@ function renderModalEditarPersonalizado(firestoreId, r) {
           <option value="Usada" ${(r.Estado || '') === 'Usada' ? 'selected' : ''}>Usada</option>
         </select>
       </div>
-      <div class="field"><label>Cantidad</label><input type="number" id="e-cantidad" value="${r.Cantidad || 1}" min="1"></div>
-      <div class="field"><label>Precio Unitario ($)</label>
-        <input type="number" id="e-punit" value="${parseFloat(r.Precio_Unit) || 0}" min="0" class="highlight-input">
+      <div class="field" style="grid-column:1/-1;">
+        <label>Presupuesto Total ($)</label>
+        <input type="number" id="e-presupuesto" value="${parseFloat(r.PresupuestoTotal) || parseFloat(r.Total) || parseFloat(r.Precio_Unit) || 0}" min="0" class="highlight-input">
       </div>
+      ${(r.Metodologia !== 'personalizado' && (parseFloat(r.Total) || 0) > 0) ? `
+      <div class="field" style="grid-column:1/-1;">
+        <label>El monto ya cargado (${formatearMonto(r.Moneda || 'ARS', r.Total)}) es un…</label>
+        <select id="e-tipoConversion">
+          <option value="avance">Avance</option>
+          <option value="anticipo">Anticipo</option>
+        </select>
+      </div>` : ''}
       <div class="field" style="grid-column:1/-1;">
         <label>Descripción</label>
         <textarea id="e-desc">${r.Descripcion || ''}</textarea>
@@ -959,12 +1046,19 @@ function renderModalEditarEstandar(firestoreId, r) {
   const conIVA = typeof r.IVAIncluido === 'boolean' ? r.IVAIncluido : (parseFloat(r.IVA) > 0);
   const ivaPct = r.IVAPorcentaje != null ? r.IVAPorcentaje : 21;
 
+  document.getElementById('modalContent').classList.add('modal-card-wide');
   document.getElementById('modalContent').innerHTML = `
     <div class="modal-header">
       <span style="font-family:'Lora',serif;font-size:15px;color:var(--brown-mid);font-weight:600;">Editar registro</span>
       <button class="modal-close" onclick="cerrarModal()">✕</button>
     </div>
     <div class="modal-edit-grid">
+      <div class="field" style="grid-column:1/-1;"><label>Metodología de pago</label>
+        <select id="e-metodologia" onchange="cambiarMetodologiaEdicion('${firestoreId}', this.value)">
+          <option value="estandar" selected>Estándar · pieza / factura</option>
+          <option value="personalizado">Personalizado · trabajo / servicio</option>
+        </select>
+      </div>
       <div class="field"><label>Proveedor</label><input type="text" id="e-proveedor" value="${r.Proveedor || ''}"></div>
       <div class="field"><label>N° Factura</label><input type="text" id="e-factura" value="${r.Factura || ''}"></div>
       <div class="field"><label>Moneda</label>
@@ -1132,7 +1226,8 @@ function recalcularFacturaItemsEdit() {
 async function guardarEdicion(firestoreId) {
   const r = inventario.find(x => x.firestoreId === firestoreId);
   if (!r) return;
-  if (r.Metodologia === 'personalizado') { await guardarEdicionPersonalizado(firestoreId); return; }
+  const metodologiaVisible = document.getElementById('e-metodologia')?.value || r.Metodologia || 'estandar';
+  if (metodologiaVisible === 'personalizado') { await guardarEdicionPersonalizado(firestoreId); return; }
   await guardarEdicionEstandar(firestoreId);
 }
 
@@ -1154,6 +1249,7 @@ async function guardarEdicionEstandar(firestoreId) {
   const cambios = {
     Pieza:         primerItem.descripcion,
     Codigo:        primerItem.codigo,
+    Metodologia:   'estandar',
     Factura:       document.getElementById('e-factura').value.trim(),
     Proveedor:     proveedor,
     Moneda:        moneda,
@@ -1175,24 +1271,48 @@ async function guardarEdicionEstandar(firestoreId) {
 }
 
 async function guardarEdicionPersonalizado(firestoreId) {
-  const cant  = parseInt(document.getElementById('e-cantidad').value) || 1;
-  const punit = parseFloat(document.getElementById('e-punit').value)  || 0;
+  const r = inventario.find(x => x.firestoreId === firestoreId);
+  const presupuesto = parseFloat(document.getElementById('e-presupuesto').value) || 0;
   const pieza = document.getElementById('e-pieza').value.trim();
   if (!pieza) { alert('El nombre de la pieza es obligatorio.'); return; }
+  if (presupuesto <= 0) { alert('El presupuesto total debe ser mayor a 0.'); return; }
 
   const cambios = {
-    Pieza:       pieza,
-    Codigo:      document.getElementById('e-codigo').value.trim(),
-    Factura:     document.getElementById('e-factura').value.trim(),
-    Proveedor:   document.getElementById('e-proveedor').value.trim(),
-    Moneda:      document.getElementById('e-moneda').value,
-    Proyecto:    document.getElementById('e-proyecto').value,
-    Estado:      document.getElementById('e-estado').value,
-    Cantidad:    cant,
-    Precio_Unit: punit.toFixed(2),
-    Total:       (punit * cant).toFixed(2),
-    Descripcion: document.getElementById('e-desc').value.trim(),
+    Pieza:            pieza,
+    Codigo:           document.getElementById('e-codigo').value.trim(),
+    Metodologia:      'personalizado',
+    Factura:          document.getElementById('e-factura').value.trim(),
+    Proveedor:        document.getElementById('e-proveedor').value.trim(),
+    Moneda:           document.getElementById('e-moneda').value,
+    Proyecto:         document.getElementById('e-proyecto').value,
+    Estado:           document.getElementById('e-estado').value,
+    PresupuestoTotal: presupuesto.toFixed(2),
+    Descripcion:      document.getElementById('e-desc').value.trim(),
   };
+
+  // Si el registro recién pasa de "estándar" a "personalizado", el importe que ya
+  // tenía cargado (factura previa) no se descarta: queda como el primer
+  // anticipo/avance, según lo que se indique.
+  if (r && r.Metodologia !== 'personalizado') {
+    const oldTotal = parseFloat(r.Total) || 0;
+    if (oldTotal > 0) {
+      const tipoConv = document.getElementById('e-tipoConversion')?.value === 'anticipo' ? 'anticipo' : 'avance';
+      const ahora = new Date();
+      cambios.Avances = [{
+        fecha:       ahora.toLocaleDateString('es-AR'),
+        hora:        ahora.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        ts:          ahora.getTime(),
+        monto:       oldTotal.toFixed(2),
+        tipo:        tipoConv,
+        descripcion: tipoConv === 'anticipo' ? 'Anticipo (convertido desde estándar)' : 'Avance (convertido desde estándar)',
+        usuario:     userActual
+      }];
+      cambios.Total = oldTotal.toFixed(2);
+    } else {
+      cambios.Total   = '0.00';
+      cambios.Avances = [];
+    }
+  }
 
   await guardarCambiosConAdjunto(firestoreId, cambios, pieza);
 }
@@ -1434,7 +1554,7 @@ function renderHistorial() {
       </div>
       <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
         <div style="text-align:right;">
-          <div class="historial-total">${formatearMonto(r.Moneda || 'ARS', r.Total)}</div>
+          <div class="historial-total">${formatearMonto(r.Moneda || 'ARS', esPersonalizado ? r.PresupuestoTotal : r.Total)}</div>
           <div class="historial-fecha">${r.Fecha} ${r.Hora}</div>
           <div class="historial-estados-wrap">
             <span class="estado-pill" style="background:${info.bg};color:${info.color};">${info.label}</span>
@@ -1537,7 +1657,7 @@ function renderPagos(filtro) {
       </div>
       <div class="pago-right">
         <div>
-          <div class="pago-total">${formatearMonto(r.Moneda || 'ARS', r.Total)}</div>
+          <div class="pago-total">${formatearMonto(r.Moneda || 'ARS', r.Metodologia === 'personalizado' ? r.PresupuestoTotal : r.Total)}</div>
           <span class="estado-pill" style="background:${info.bg};color:${info.color};">${info.label}</span>
         </div>
         ${acc}${btnE}
