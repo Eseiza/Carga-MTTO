@@ -2031,7 +2031,247 @@ function renderOCList() {
 
 function verOC(firestoreId) {
   const o = ordenesCompra.find(x => x.firestoreId === firestoreId);
-  if (o) imprimirOC(o);
+  if (!o) return;
+  renderModalVerOC(o);
+  document.getElementById('modalOverlay').classList.add('modal-open');
+  document.body.style.overflow = 'hidden';
+}
+
+function renderModalVerOC(o) {
+  document.getElementById('modalContent').classList.add('modal-card-wide');
+  const moneda = o.Moneda || 'ARS';
+  const items  = o.Items || [];
+
+  const filas = items.map(it => `
+    <tr>
+      <td style="padding:6px 8px;">${it.codigo || '—'}</td>
+      <td style="padding:6px 8px;">${it.descripcion}</td>
+      <td style="padding:6px 8px;text-align:right;">${it.cantidad}</td>
+      <td style="padding:6px 8px;text-align:right;">${formatearMonto(moneda, it.precio)}</td>
+      <td style="padding:6px 8px;text-align:right;">${it.ivaPct}%</td>
+      <td style="padding:6px 8px;text-align:right;">${formatearMonto(moneda, it.total)}</td>
+    </tr>`).join('');
+
+  let btns = `<button class="btn btn-op modal-btn-sm" onclick="imprimirOC(ordenesCompra.find(x=>x.firestoreId==='${o.firestoreId}'))">🖨 Imprimir / PDF</button>`;
+  if (puedeEditar())   btns += `<button class="btn btn-edit modal-btn-sm" onclick="renderModalEditarOC('${o.firestoreId}')">✎ Editar</button>`;
+  if (puedeEliminar()) btns += `<button class="btn btn-danger modal-btn-sm" onclick="eliminarOC('${o.firestoreId}')">✕ Eliminar</button>`;
+
+  document.getElementById('modalContent').innerHTML = `
+    <div class="modal-header">
+      <span style="font-family:'Lora',serif;font-size:15px;color:var(--brown-mid);font-weight:600;">Orden de Compra N° ${o.NroOC}</span>
+      <button class="modal-close" onclick="cerrarModal()">✕</button>
+    </div>
+    <div class="modal-total">${formatearMonto(moneda, o.Total)}</div>
+    <div class="modal-grid">
+      <div class="modal-field"><span class="modal-label">Proveedor</span><span class="modal-value">${o.Proveedor || '—'}</span></div>
+      <div class="modal-field"><span class="modal-label">N° Cotización</span><span class="modal-value">${o.Cotizacion || '—'}</span></div>
+      <div class="modal-field"><span class="modal-label">Dirección</span><span class="modal-value">${o.Direccion || '—'}</span></div>
+      <div class="modal-field"><span class="modal-label">Localidad</span><span class="modal-value">${o.Localidad || '—'}</span></div>
+      <div class="modal-field"><span class="modal-label">Moneda</span><span class="modal-value">${moneda === 'USD' ? 'Dólares (USD)' : 'Pesos (ARS)'}</span></div>
+      <div class="modal-field"><span class="modal-label">Fecha</span><span class="modal-value">${o.Fecha || '—'}</span></div>
+      <div class="modal-field"><span class="modal-label">Registrado por</span><span class="modal-value">${o.Usuario || '—'}</span></div>
+    </div>
+    <div class="modal-desc-wrap">
+      <span class="modal-label">Productos</span>
+      <div class="oc-tabla-wrap" style="margin-top:8px;">
+        <table class="oc-tabla">
+          <thead><tr>
+            <th style="padding:6px 8px;text-align:left;">Código</th>
+            <th style="padding:6px 8px;text-align:left;">Descripción</th>
+            <th style="padding:6px 8px;text-align:right;">Cant.</th>
+            <th style="padding:6px 8px;text-align:right;">Precio</th>
+            <th style="padding:6px 8px;text-align:right;">IVA</th>
+            <th style="padding:6px 8px;text-align:right;">Total</th>
+          </tr></thead>
+          <tbody>${filas}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-acciones">${btns}</div>
+  `;
+}
+
+/* ── Editar Orden de Compra ── */
+let ocEditFilasCounter = 0;
+
+function renderModalEditarOC(firestoreId) {
+  const o = ordenesCompra.find(x => x.firestoreId === firestoreId);
+  if (!o) return;
+  document.getElementById('modalContent').classList.add('modal-card-wide');
+  const moneda = o.Moneda || 'ARS';
+
+  document.getElementById('modalContent').innerHTML = `
+    <div class="modal-header">
+      <span style="font-family:'Lora',serif;font-size:15px;color:var(--brown-mid);font-weight:600;">Editar Orden de Compra N° ${o.NroOC}</span>
+      <button class="modal-close" onclick="cerrarModal()">✕</button>
+    </div>
+    <div class="modal-edit-grid">
+      <div class="field"><label>Proveedor</label><input type="text" id="oce-proveedor" value="${o.Proveedor || ''}"></div>
+      <div class="field"><label>N° de Cotización</label><input type="text" id="oce-cotizacion" value="${o.Cotizacion || ''}"></div>
+      <div class="field"><label>Dirección del proveedor</label><input type="text" id="oce-direccion" value="${o.Direccion || ''}"></div>
+      <div class="field"><label>Localidad</label><input type="text" id="oce-localidad" value="${o.Localidad || ''}"></div>
+      <div class="field"><label>Moneda</label>
+        <select id="oce-moneda">
+          <option value="ARS" ${moneda === 'ARS' ? 'selected' : ''}>Pesos (ARS)</option>
+          <option value="USD" ${moneda === 'USD' ? 'selected' : ''}>Dólares (USD)</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-desc-wrap">
+      <span class="modal-label">Productos</span>
+      <div class="oc-tabla-wrap" style="margin-top:8px;">
+        <table class="oc-tabla">
+          <thead>
+            <tr>
+              <th>Código</th><th>Descripción</th><th>Cant.</th><th>Precio Unit.</th><th>IVA %</th><th>Subtotal</th><th>Total</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="oceItemsBody"></tbody>
+        </table>
+      </div>
+      <button type="button" class="btn btn-agregar-fila" onclick="agregarFilaOCEdit()">＋ Agregar producto</button>
+      <div class="oc-totales" id="oceTotales"></div>
+    </div>
+    <div class="modal-acciones">
+      <button class="btn btn-logout modal-btn-sm" onclick="renderModalVerOC(ordenesCompra.find(x=>x.firestoreId==='${firestoreId}'))">← Cancelar</button>
+      <button class="btn btn-register modal-btn-sm" onclick="guardarEdicionOC('${firestoreId}')">✔ Guardar cambios</button>
+    </div>
+  `;
+
+  document.getElementById('oceItemsBody').innerHTML = '';
+  (o.Items || []).forEach(it => agregarFilaOCEdit(it));
+  if (!(o.Items || []).length) agregarFilaOCEdit();
+  recalcularOCEdit();
+}
+
+function agregarFilaOCEdit(datos) {
+  const body = document.getElementById('oceItemsBody');
+  const id   = 'oce-fila-' + (++ocEditFilasCounter);
+  const tr   = document.createElement('tr');
+  tr.id = id;
+  const ivaDefault = datos && datos.ivaPct != null ? datos.ivaPct : 21;
+  tr.innerHTML = `
+    <td><input type="text"   class="oce-codigo"    placeholder="Código"></td>
+    <td class="oc-col-desc"><input type="text"   class="oce-desc"      placeholder="Descripción del producto"></td>
+    <td class="oc-col-num"><input type="number" class="oce-cant"      value="1" min="1" step="1" oninput="recalcularOCEdit()"></td>
+    <td class="oc-col-money"><input type="number" class="oce-precio"    value="0" min="0" step="0.01" oninput="recalcularOCEdit()"></td>
+    <td class="oc-col-num"><input type="number" class="oce-ivapct"    value="${ivaDefault}" min="0" step="0.1" oninput="recalcularOCEdit()"></td>
+    <td class="oce-subtotal">$ 0,00</td>
+    <td class="oce-total">$ 0,00</td>
+    <td><button type="button" class="oc-btn-quitar-fila" onclick="quitarFilaOCEdit('${id}')">✕</button></td>
+  `;
+  body.appendChild(tr);
+  if (datos) {
+    tr.querySelector('.oce-codigo').value = datos.codigo || '';
+    tr.querySelector('.oce-desc').value   = datos.descripcion || '';
+    tr.querySelector('.oce-cant').value   = datos.cantidad || 1;
+    tr.querySelector('.oce-precio').value = datos.precio || 0;
+    tr.querySelector('.oce-ivapct').value = datos.ivaPct != null ? datos.ivaPct : ivaDefault;
+  }
+  recalcularOCEdit();
+}
+
+function quitarFilaOCEdit(id) {
+  const fila = document.getElementById(id);
+  if (fila) fila.remove();
+  if (!document.getElementById('oceItemsBody').children.length) agregarFilaOCEdit();
+  recalcularOCEdit();
+}
+
+function leerFilasOCEdit() {
+  return [...document.querySelectorAll('#oceItemsBody tr')].map(tr => {
+    const cantidad = parseFloat(tr.querySelector('.oce-cant').value) || 0;
+    const precio   = parseFloat(tr.querySelector('.oce-precio').value) || 0;
+    const ivaPct   = parseFloat(tr.querySelector('.oce-ivapct').value) || 0;
+    const subtotal = cantidad * precio;
+    const impuesto = subtotal * (ivaPct / 100);
+    const total    = subtotal + impuesto;
+    return {
+      fila:        tr,
+      codigo:      tr.querySelector('.oce-codigo').value.trim(),
+      descripcion: tr.querySelector('.oce-desc').value.trim(),
+      cantidad, precio, ivaPct, subtotal, impuesto, total
+    };
+  });
+}
+
+function recalcularOCEdit() {
+  const monedaSel = document.getElementById('oce-moneda');
+  const moneda = monedaSel ? monedaSel.value : 'ARS';
+  const items  = leerFilasOCEdit();
+
+  items.forEach(it => {
+    it.fila.querySelector('.oce-subtotal').textContent = formatearMonto(moneda, it.subtotal);
+    it.fila.querySelector('.oce-total').textContent     = formatearMonto(moneda, it.total);
+  });
+
+  const subtotalGral = items.reduce((a, it) => a + it.subtotal, 0);
+  const ivaGral       = items.reduce((a, it) => a + it.impuesto, 0);
+  const totalGral     = subtotalGral + ivaGral;
+
+  const cont = document.getElementById('oceTotales');
+  if (cont) {
+    cont.innerHTML = `
+      <div class="oc-totales-fila"><span>Subtotal</span><span>${formatearMonto(moneda, subtotalGral)}</span></div>
+      <div class="oc-totales-fila"><span>I.V.A.</span><span>${formatearMonto(moneda, ivaGral)}</span></div>
+      <div class="oc-totales-fila oc-total-final"><span>TOTAL</span><span>${formatearMonto(moneda, totalGral)}</span></div>
+    `;
+  }
+}
+
+async function guardarEdicionOC(firestoreId) {
+  const proveedor  = document.getElementById('oce-proveedor').value.trim();
+  const cotizacion = document.getElementById('oce-cotizacion').value.trim();
+  const direccion  = document.getElementById('oce-direccion').value.trim();
+  const localidad  = document.getElementById('oce-localidad').value.trim();
+  const moneda     = document.getElementById('oce-moneda').value;
+
+  if (!proveedor) { alert('Ingresá el nombre del proveedor.'); return; }
+
+  const items = leerFilasOCEdit().filter(it => it.descripcion && it.cantidad > 0 && it.precio > 0);
+  if (!items.length) { alert('Agregá al menos un producto con cantidad y precio válidos.'); return; }
+
+  const subtotalGral = items.reduce((a, it) => a + it.subtotal, 0);
+  const ivaGral       = items.reduce((a, it) => a + it.impuesto, 0);
+  const totalGral     = subtotalGral + ivaGral;
+
+  const cambios = {
+    Proveedor:  proveedor,
+    Cotizacion: cotizacion,
+    Direccion:  direccion,
+    Localidad:  localidad,
+    Moneda:     moneda,
+    Items:      items.map(({ fila, ...resto }) => resto),
+    Subtotal:   subtotalGral.toFixed(2),
+    IVA:        ivaGral.toFixed(2),
+    Total:      totalGral.toFixed(2)
+  };
+
+  mostrarToast('💾 Guardando cambios...', 'loading', 0);
+  try {
+    await db.collection(OC_COL).doc(firestoreId).update(cambios);
+    const idx = ordenesCompra.findIndex(x => x.firestoreId === firestoreId);
+    if (idx !== -1) ordenesCompra[idx] = { ...ordenesCompra[idx], ...cambios };
+    mostrarToast('✅ Orden de Compra actualizada', 'success', 3000);
+    renderOCList();
+    renderModalVerOC(ordenesCompra.find(x => x.firestoreId === firestoreId));
+  } catch (e) {
+    mostrarToast('❌ Error al guardar: ' + e.message, 'error', 5000);
+  }
+}
+
+async function eliminarOC(firestoreId) {
+  if (!confirm('¿Eliminar esta Orden de Compra? Esta acción no se puede deshacer.')) return;
+  mostrarToast('🗑 Eliminando...', 'loading', 0);
+  try {
+    await db.collection(OC_COL).doc(firestoreId).delete();
+    ordenesCompra = ordenesCompra.filter(x => x.firestoreId !== firestoreId);
+    mostrarToast('✅ Orden de Compra eliminada', 'success', 3000);
+    cerrarModal();
+    renderOCList();
+  } catch (e) {
+    mostrarToast('❌ Error al eliminar: ' + e.message, 'error', 5000);
+  }
 }
 
 function imprimirOC(o) {
